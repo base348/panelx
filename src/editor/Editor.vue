@@ -18,6 +18,9 @@
       <button type="button" class="panelx-editor-btn" @click="loadDemo">
         加载示例
       </button>
+      <button type="button" class="panelx-editor-btn" @click="loadWorkshopConfig">
+        加载车间大屏配置
+      </button>
     </aside>
     <main class="panelx-editor-main" ref="dropRef" @dragover.prevent @drop="onDrop">
       <div class="panelx-editor-preview-wrap">
@@ -201,7 +204,13 @@ const typeLabels: Record<WidgetType2D, string> = {
   decoration: '装饰',
   stat: '指标',
   card: '卡片',
-  panel: '面板'
+  panel: '面板',
+  screenTitle: '大屏标题',
+  topBar: '顶栏',
+  glassChart: '玻璃图表',
+  deviceCard: '设备卡片',
+  bottomNav: '底栏',
+  progressList: '进度列表'
 }
 function widgetLabel(w: WidgetConfig2D) {
   return typeLabels[w.type] || w.type
@@ -230,6 +239,7 @@ function exportConfig() {
 }
 
 function loadDemo() {
+  config.backgroundLayer = undefined
   config.widgets2D = [
     {
       id: 'stat1',
@@ -261,6 +271,15 @@ function loadDemo() {
       props: { variant: 'corner' }
     }
   ]
+}
+
+async function loadWorkshopConfig() {
+  const mod = await import('../demo/dashboard_config.json')
+  const loaded = mod.default as DashboardConfig
+  config.design = { ...loaded.design }
+  config.backgroundLayer = loaded.backgroundLayer ? JSON.parse(JSON.stringify(loaded.backgroundLayer)) : undefined
+  config.widgets2D = JSON.parse(JSON.stringify(loaded.widgets2D))
+  selectedId.value = config.widgets2D[0]?.id ?? null
 }
 </script>
 

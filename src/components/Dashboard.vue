@@ -40,7 +40,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { SizeManager2D } from '../core/size'
+import { SizeManager2D, computeDashboardActualSize } from '../core/size'
 import type {
   DashboardConfig,
   WidgetConfig2D,
@@ -115,11 +115,22 @@ const containerStyle = computed((): Record<string, string> => {
 function ensureSizeManager() {
   if (!containerRef.value) return
   const d = getDesignSize()
-  const w = containerRef.value.offsetWidth
-  if (!w) return
+  const parent = containerRef.value.parentElement
+  let screenW = parent ? parent.clientWidth : 0
+  let screenH = parent ? parent.clientHeight : 0
+  if (typeof window !== 'undefined' && (screenW <= 0 || screenH <= 0)) {
+    screenW = screenW > 0 ? screenW : window.innerWidth
+    screenH = screenH > 0 ? screenH : window.innerHeight
+  }
+  if (!screenW || !screenH) return
 
-  // 横向占满容器宽度，高度按设计稿比例计算；若小于视口则在下方留白
-  const actualW = Math.max(1, Math.floor(w))
+  const { actualWidth: actualW } = computeDashboardActualSize({
+    screenWidth: screenW,
+    screenHeight: screenH,
+    designWidth: d.width,
+    designHeight: d.height
+  })
+
   if (!sizeManager.value) {
     sizeManager.value = new SizeManager2D({
       designWidth: d.width,
@@ -133,11 +144,11 @@ function ensureSizeManager() {
   sizeVersion.value++
 }
 
+/** widget 展示 v1：与迁移 JSON 时一致，用 sizeManager.designToActual */
 function getActualRect(w: WidgetConfig2D): { x: number; y: number; width: number; height: number } | null {
   const sm = sizeManager.value
   if (!sm || !w.layout) return null
-  const rect = sm.designToActual(w.layout as DesignRect)
-  return rect
+  return sm.designToActual(w.layout as DesignRect)
 }
 
 function getWidgetStyle(w: WidgetConfig2D): Record<string, string> {

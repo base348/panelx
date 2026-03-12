@@ -72,8 +72,17 @@ async function runVerification() {
     addResult('Dashboard 配置结构', false, String(e))
   }
 
-  // 在此追加你的验证项…
-  // addResult('你的验证名', true, '说明')
+  // 验证车间大屏 JSON 配置可加载且结构正确（供编辑器加载/导出）
+  try {
+    const mod = await import('./dashboard_config.json')
+    const c = mod.default as unknown as Record<string, unknown>
+    const hasDesign = c && typeof c.design === 'object' && typeof (c.design as { width?: number }).width === 'number'
+    const hasWidgets = Array.isArray(c.widgets2D) && c.widgets2D.length > 0
+    const hasTopBar = hasWidgets && (c.widgets2D as { id: string }[]).some((w) => w.id === 'ws-topbar')
+    addResult('车间大屏 JSON 配置', hasDesign && hasWidgets, hasTopBar ? 'design + widgets2D + ws-topbar 可被编辑器加载' : 'design + widgets2D 存在')
+  } catch (e) {
+    addResult('车间大屏 JSON 配置', false, String(e))
+  }
 }
 
 function run() {

@@ -70,11 +70,23 @@ const isStandaloneWorkshop = ref(false)
 function openWorkshopTab() {
   const u = new URL(window.location.href)
   u.searchParams.set('workshop', '1')
-  // 避免保留原来的 view 状态（可选），统一由参数决定
   window.open(u.toString(), '_blank', 'noopener,noreferrer')
 }
 
-/** TopBar 业务数据：时间每 2.3 秒刷新，温湿度由外部传入 */
+/** 车间大屏配置：先空白，由异步加载 JSON（模拟 API）填充 */
+const workshopBaseConfig = ref<DashboardConfig>({
+  design: { width: 2560, height: 1080 },
+  widgets2D: []
+})
+
+/** 模拟 API：异步加载车间大屏 JSON 配置 */
+async function loadWorkshopConfig() {
+  const mod = await import('./demo/dashboard_config.json')
+  const base = mod.default as unknown as DashboardConfig
+  workshopBaseConfig.value = { ...base }
+}
+
+/** TopBar 业务数据：时间、温湿度 */
 const topBarDateTime = ref('')
 const topBarTemperature = ref('25℃')
 const topBarHumidity = ref('50%rh')
@@ -87,6 +99,12 @@ function formatTopBarTime(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${week} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
+/** 单独函数刷新 TopBar 显示（时间每 2.3 秒调用） */
+function refreshTopBar() {
+  topBarDateTime.value = formatTopBarTime()
+  // 温湿度可由外部 API 更新后写入 topBarTemperature / topBarHumidity
+}
+
 let topBarRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
@@ -95,11 +113,10 @@ onMounted(() => {
     isStandaloneWorkshop.value = true
     view.value = 'workshop'
     if (typeof document !== 'undefined') document.title = '晶圆加工车间可视化大屏'
+    loadWorkshopConfig()
   }
-  topBarDateTime.value = formatTopBarTime()
-  topBarRefreshTimer = setInterval(() => {
-    topBarDateTime.value = formatTopBarTime()
-  }, 2300)
+  refreshTopBar()
+  topBarRefreshTimer = setInterval(refreshTopBar, 2300)
 })
 
 onUnmounted(() => {
@@ -267,81 +284,18 @@ const demoConfig: DashboardConfig = {
   ]
 }
 
-/** 车间大屏 demo：仿晶圆加工车间可视化（3D 背景 + 玻璃面板图表） */
-const workshopSceneConfig: Scene3DConfig = {
-  ...scene3DConfig,
-  statsStyle: 0,
-  background: 0x0d1b2a,
-  /** 3D 场景内悬浮信息框（绑定到某台设备，红色故障框） */
-  infoBoxes: [
-    {
-      id: 'infobox-srm005',
-      modelId: 'ProductLine-5',
-      offset: [0, 1.4, 0],
-      title: '#5机',
-      equipmentId: 'SRM005',
-      status: '故障',
-      statusType: 'fault',
-      runningTime: '3.5 h',
-      message: '当前设备故障,正在抢修中',
-      rotation: [0, Math.PI/4, 0]
-    },
-    {
-      id: 'infobox-srm004',
-      modelId: 'ProductLine-4',
-      offset: [-4.0, 1.4, 0],
-      title: '#4机',
-      equipmentId: 'SRM004',
-      status: '正常',
-      statusType: 'normal',
-      runningTime: '12.0 h',
-      message: '当前设备完成工作',
-      rotation: [0, Math.PI/4, 0]
-    }
-  ]
-}
-
-const left = 30
-const right = 1570
-const aspectRatio = 16/9
-const widgetHeight = 180
-const widgetWidth = widgetHeight * aspectRatio
-
-const firstCardY = 120
-const nextCardAddY = 180+10
-
-const nextY = (n: number) => {
-  return firstCardY + nextCardAddY*n
-}
-
-// 车间大屏 layout：设计稿 1920×1080；TopBar 时间/温湿度由上方 ref 注入，时间每 2.3s 刷新
-const workshopWidgetsBase: DashboardConfig['widgets2D'] = [
-    { id: 'ws-title', type: 'screenTitle', layout: { x: 0, y: 0, width: 1920, height: 120 }, visible: true, props: { text: '水溶膜加工车间数字化大屏' } },
-    { id: 'ws-topbar', type: 'topBar', layout: { x: 0, y: 20, width: 1920, height: 40 }, visible: true, props: { datetime: '', temperature: '25℃', humidity: '50%rh' } },
-    // left side
-    { id: 'ws-order', type: 'glassChart', layout: { x: left, y: nextY(0), width: widgetWidth, height: widgetHeight }, visible: true, props: { title: '订单总览', subTitle: 'ORDER REVIEW', chartHeight: '175px', options: { tooltip: { trigger: 'item' }, graphic: [{ type: 'text', left: 'center', top: '48%', style: { text: '17.05%', fill: '#00d4ff', fontSize: 18, fontWeight: 'bold' } }, { type: 'text', left: 'center', top: '58%', style: { text: '已完成 10000 订单', fill: 'rgba(255,255,255,0.85)', fontSize: 11 } }], series: [{ type: 'pie', radius: ['52%', '74%'], center: ['50%', '50%'], data: [{ value: 17.05, name: '已完成', itemStyle: { color: '#00d4ff' } }, { value: 82.95, name: '进行中', itemStyle: { color: 'rgba(0,212,255,0.2)' } }], label: { show: false } }] } } },
-    { id: 'ws-staff', type: 'glassChart', layout: { x: left, y: nextY(1), width: widgetWidth, height: widgetHeight }, visible: true, props: { title: '在岗人员设备情况', subTitle: 'PERSONNEL EQUIPMENT', chartHeight: '198px', options: { grid: { left: 44, right: 24, top: 28, bottom: 36 }, xAxis: { type: 'category', data: ['FTN', 'CVD', 'FGQ', 'FVD', 'AQI'], axisLine: { lineStyle: { color: 'rgba(0,212,255,0.4)' } }, axisLabel: { color: '#fff', fontSize: 11 } }, yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: 'rgba(0,212,255,0.15)' } }, axisLabel: { color: 'rgba(255,255,255,0.8)' } }, legend: { bottom: 0, textStyle: { color: '#fff', fontSize: 10 }, data: ['A班次', 'B班次'] }, series: [{ name: 'A班次', data: [92, 88, 95, 78, 85], type: 'bar', itemStyle: { color: '#00d4ff' } }, { name: 'B班次', data: [85, 90, 88, 82, 88], type: 'bar', itemStyle: { color: 'rgba(0,212,255,0.5)' } }] } } },
-    { id: 'ws-capacity', type: 'progressList', layout: { x: left, y: nextY(2), width: widgetWidth, height: widgetHeight }, visible: true, props: { title: '产线生产进度', subTitle: 'PRODUCTION PROGRESS', items: [{ label: '产线一', value: '10000', percent: 53.33 }, { label: '产线二', value: '12000', percent: 82.5 }, { label: '产线三', value: '9800', percent: 48.2 }, { label: '产线四', value: '17284', percent: 86.1 }] } },
-    // right side
-    { id: 'ws-cycle', type: 'glassChart', layout: { x: right, y: nextY(0), width: widgetWidth, height: widgetHeight }, visible: true, props: { title: '生产周期', subTitle: 'PRODUCTION CYCLE · 4班次', chartHeight: '140px', options: { grid: { left: 48, right: 48, top: 24, bottom: 24 }, xAxis: { type: 'category', data: ['1#', '2#', '3#', '4#', '5#', '6#'], axisLabel: { color: '#fff' }, axisLine: { lineStyle: { color: 'rgba(0,212,255,0.4)' } } }, yAxis: { type: 'value', show: false }, series: [{ data: [51, 54, 50, 55, 53, 52], type: 'bar', itemStyle: { color: '#00d4ff' }, label: { show: true, position: 'top', color: '#fff', formatter: '{c} min' } }] } } },
-    { id: 'ws-yield', type: 'glassChart', layout: { x: right, y: nextY(1), width: widgetWidth, height: widgetHeight }, visible: true, props: { title: '良品合格率', chartHeight: '160px', options: { grid: { left: 44, right: 24, top: 24, bottom: 36 }, xAxis: { type: 'category', data: ['FVD', 'CVD', 'AQI', 'FGQ'], axisLine: { lineStyle: { color: 'rgba(0,212,255,0.4)' } }, axisLabel: { color: '#fff' } }, yAxis: { type: 'value', axisLabel: { color: 'rgba(255,255,255,0.8)' }, splitLine: { lineStyle: { color: 'rgba(0,212,255,0.15)' } } }, legend: { bottom: 0, textStyle: { color: '#fff', fontSize: 10 }, data: ['A班次', 'B班次'] }, series: [{ name: 'A班次', data: [98.2, 97.5, 99.0, 98.6], type: 'bar', itemStyle: { color: '#00d4ff' } }, { name: 'B班次', data: [97.8, 98.2, 98.5, 97.9], type: 'bar', itemStyle: { color: 'rgba(0,212,255,0.5)' } }] } } },
-    { id: 'ws-rate', type: 'glassChart', layout: { x: right, y: nextY(2), width: widgetWidth, height: widgetHeight }, visible: true, props: { title: '近7日交付合格率', subTitle: 'DELIVERY QUALIFICATION RATE', chartHeight: '178px', options: { grid: { left: 44, right: 24, top: 28, bottom: 36 }, xAxis: { type: 'category', data: ['01-01', '01-02', '01-03', '01-04', '01-05', '01-06', '01-07'], axisLine: { lineStyle: { color: 'rgba(0,212,255,0.4)' } }, axisLabel: { color: '#fff', fontSize: 10 } }, yAxis: { type: 'value', axisLabel: { color: 'rgba(255,255,255,0.8)' }, splitLine: { lineStyle: { color: 'rgba(0,212,255,0.15)' } } }, legend: { bottom: 0, textStyle: { color: '#fff', fontSize: 10 }, data: ['A班次', 'B班次', 'C班次'] }, series: [{ name: 'A班次', data: [98.2, 98.5, 97.8, 99.0, 98.6, 99.2, 98.8], type: 'line', smooth: true, lineStyle: { color: '#00d4ff' }, itemStyle: { color: '#00d4ff' } }, { name: 'B班次', data: [97.5, 98.0, 98.2, 98.5, 97.9, 98.4, 99.0], type: 'line', smooth: true, lineStyle: { color: 'rgba(0,212,255,0.7)' }, itemStyle: { color: 'rgba(0,212,255,0.7)' } }, { name: 'C班次', data: [98.0, 97.8, 98.5, 98.2, 98.8, 98.0, 98.5], type: 'line', smooth: true, lineStyle: { color: 'rgba(0,212,255,0.5)' }, itemStyle: { color: 'rgba(0,212,255,0.5)' } }] } } },
-    { id: 'ws-output', type: 'glassChart', layout: { x: left, y: 720, width: widgetWidth*5.8, height: widgetHeight*1.3 }, visible: true, props: { title: '近7日产品产量', chartHeight: '160px', options: { grid: { left: 44, right: 24, top: 24, bottom: 36 }, xAxis: { type: 'category', data: ['01-01', '01-02', '01-03', '01-04', '01-05', '01-06', '01-07'], axisLine: { lineStyle: { color: 'rgba(0,212,255,0.4)' } }, axisLabel: { color: '#fff', fontSize: 10 } }, yAxis: { type: 'value', axisLabel: { color: 'rgba(255,255,255,0.8)' }, splitLine: { lineStyle: { color: 'rgba(0,212,255,0.15)' } } }, legend: { bottom: 0, textStyle: { color: '#fff', fontSize: 10 }, data: ['A班次', 'B班次', 'C班次'] }, series: [{ name: 'A班次', data: [3200, 3500, 3100, 3800, 3600, 3400, 3700], type: 'line', smooth: true, lineStyle: { color: '#00d4ff' }, itemStyle: { color: '#00d4ff' }, areaStyle: { color: 'rgba(0,212,255,0.15)' } }, { name: 'B班次', data: [2800, 3200, 3300, 2900, 3500, 3200, 3400], type: 'line', smooth: true, lineStyle: { color: 'rgba(0,212,255,0.7)' }, itemStyle: { color: 'rgba(0,212,255,0.7)' }, areaStyle: { color: 'rgba(0,212,255,0.08)' } }, { name: 'C班次', data: [3000, 3100, 3400, 3200, 3300, 3500, 3600], type: 'line', smooth: true, lineStyle: { color: 'rgba(0,212,255,0.5)' }, itemStyle: { color: 'rgba(0,212,255,0.5)' }, areaStyle: { color: 'rgba(0,212,255,0.06)' } }] } } },
-    // device card
-    { id: 'ws-device', type: 'deviceCard', layout: { x: 1300, y: 120, width: 200, height: 170 }, visible: true, props: { items: [{ label: '设备编号', value: 'KS002', icon: '▸' }, { label: '所属产线', value: '产线四', icon: '▸' }, { label: '当前执行工单', value: 'GD000002', icon: '▸' }, { label: '当日产量', value: '17284 片', icon: '▸' }, { label: '设备OEE', value: '75%', icon: '▸' }] } },
-    // bottom nav
-    { id: 'ws-nav', type: 'bottomNav', layout: { x: 0, y: 952, width: 1920, height: 88 }, visible: true, props: { items: [{ label: '全屏总览', active: true }, { label: '设备监控' }, { label: '故障监控' }] } }
-  ]
-
-const workshopDemoConfig = computed<DashboardConfig>(() => ({
-  design: { width: 1920, height: 1080 },
-  backgroundLayer: { type: 'scene3d', config: workshopSceneConfig },
-  widgets2D: workshopWidgetsBase.map((w) =>
-    w.id === 'ws-topbar'
-      ? { ...w, props: { ...w.props, datetime: topBarDateTime.value, temperature: topBarTemperature.value, humidity: topBarHumidity.value } }
-      : w
-  )
-}))
+/** 车间大屏展示用配置：在 base 上注入 TopBar 时间/温湿度 */
+const workshopDemoConfig = computed<DashboardConfig>(() => {
+  const base = workshopBaseConfig.value
+  return {
+    ...base,
+    widgets2D: base.widgets2D.map((w) =>
+      w.id === 'ws-topbar'
+        ? { ...w, props: { ...w.props, datetime: topBarDateTime.value, temperature: topBarTemperature.value, humidity: topBarHumidity.value } }
+        : w
+    )
+  }
+})
 </script>
 
 <style>
@@ -436,19 +390,26 @@ const workshopDemoConfig = computed<DashboardConfig>(() => ({
 /* 独立 Tab 车间大屏：整页占满视口，无 header */
 .panelx-demo-standalone-workshop {
   height: 100vh;
+  overflow: hidden;
 }
 .panelx-demo-standalone-workshop .panelx-demo-main {
-  height: 100%;
-  flex: 1;
+  height: 100vh;
   min-height: 0;
+  overflow: hidden;
 }
 .panelx-demo-standalone-workshop .panelx-demo-screen.panelx-demo-workshop {
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 .panelx-demo-standalone-workshop .panelx-dashboard-wrap {
+  width: 100%;
   height: 100%;
-  align-items: flex-start;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 .panelx-demo-scene3d {
   flex: 1;
