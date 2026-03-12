@@ -1,0 +1,25 @@
+/**
+ * PanelX 3D 框架入口
+ * 封装 World / StoryBoard / Loader / Model 等，供大屏 3D 场景使用
+ */
+
+export { World } from './World'
+export { setup3D } from './WorldSetup'
+export type { StoryBoard, StoryBoardController } from './StoryBoard'
+export { Loader } from './Loder'
+export { BaseStoryBoard } from './storyboard/BaseStoryBoard'
+export { SimpleStoryBoard } from './storyboard/SimpleStoryBoard'
+export { ControlsStoryBoard } from './storyboard/ControlsStoryBoard'
+export { SpriteStoryBoard } from './storyboard/SpriteStoryBoard'
+export { Model } from './model/Model'
+export { ModelLoadable } from './model/ModelLoadable'
+export { ModelInstanceStore } from './ModelInstanceStore'
+export { LayerDef } from './LayerDef'
+export { FrequencyManager } from './FrequencyManager'
+export { StatsWrapper } from './StatsWrapper'
+export { genOrthographicCamera } from './Cameras'
+export { debugEnabled, bindConfig, releaseMesh, Format, StaticConfig } from './util'
+export type { Director } from './Director'
+export { BaseDirector } from './director/BaseDirector'
+export { FrameManager, FrameItem } from './director/FrameManager'
+export { SceneDirector } from './director/SceneDirector'

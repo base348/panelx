@@ -1,0 +1,57 @@
+{
+  "name": "@lishimeng/panelx",
+  "version": "0.1.0",
+  "description": "Panel X SDK - 3D Visualization Dashboard Components",
+  "packageManager": "pnpm@9.15.0",
+  "type": "module",
+  "main": "./dist/panelx.umd.js",
+  "module": "./dist/panelx.es.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/panelx.es.js",
+      "require": "./dist/panelx.umd.js"
+    },
+    "./dist/style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "build:lib": "vue-tsc && vite build --mode lib",
+    "preview": "vite preview",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@types/lodash": "^4.14.184",
+    "@types/video.js": "^7.3.58",
+    "@videojs-player/vue": "^1.0.0",
+    "@videojs/themes": "^1.0.1",
+    "axios": "^1.8.4",
+    "echarts": "^5.6.0",
+    "three": "0.176.0",
+    "video.js": "^8.22.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.14.1",
+    "@types/three": "0.176.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6",
+    "@vue/tsconfig": "^0.7.0",
+    "autoprefixer": "^10.4.27",
+    "happy-dom": "^20.8.3",
+    "lodash": "~4.17.21",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^4.2.1",
+    "typescript": "~5.6.2",
+    "vite": "^6.2.6",
+    "vitest": "^4.0.18",
+    "vue-tsc": "^2.2.0"
+  }
+}

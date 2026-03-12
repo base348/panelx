@@ -1,0 +1,4 @@
+export { SizeManager2D } from './SizeManager2D'
+export type { SizeManager2DOptions } from './SizeManager2D'
+export { SizeManager3D } from './SizeManager3D'
+export type { SizeManager3DOptions } from './SizeManager3D'
