@@ -9,6 +9,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
+import { registerEchartsMacaronTheme, mergeMacaronRoundOptions } from '../theme/echartsMacaron'
 import type { ChartProps } from '../types/components'
 
 const props = defineProps<ChartProps>()
@@ -18,16 +19,21 @@ let chartInstance: echarts.ECharts | null = null
 const width = props.width || '100%'
 const height = props.height || '400px'
 
+function getOptionsToSet(): import('echarts').EChartsOption {
+  return mergeMacaronRoundOptions(props.options)
+}
+
 onMounted(() => {
+  registerEchartsMacaronTheme()
   if (chartRef.value) {
     chartInstance = echarts.init(chartRef.value, props.theme)
-    chartInstance.setOption(props.options)
+    chartInstance.setOption(getOptionsToSet())
   }
 })
 
-watch(() => props.options, (newOptions) => {
+watch(() => props.options, () => {
   if (chartInstance) {
-    chartInstance.setOption(newOptions)
+    chartInstance.setOption(getOptionsToSet())
   }
 }, { deep: true })
 
@@ -47,7 +53,7 @@ onUnmounted(() => {
 /** 数据更新接口：外部喂数据时调用 */
 function setOption(option: import('echarts').EChartsOption) {
   if (chartInstance) {
-    chartInstance.setOption(option)
+    chartInstance.setOption(mergeMacaronRoundOptions(option))
   }
 }
 

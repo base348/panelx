@@ -224,6 +224,7 @@ const demoConfig: DashboardConfig = {
       layout: { x: 40, y: 160, width: 580, height: 360 },
       visible: true,
       props: {
+        theme: 'macaron',
         options: {
           xAxis: { type: 'category', data: ['1月', '2月', '3月', '4月', '5月', '6月'] },
           yAxis: { type: 'value' },
@@ -233,10 +234,33 @@ const demoConfig: DashboardConfig = {
         width: '100%'
       }
     },
+    /** 马卡龙主题 + 圆角 测试：柱状图、饼图、折线（theme 默认 macaron，圆角由 Chart 统一合并） */
+    {
+      id: 'chart-style-test',
+      type: 'glassChart',
+      layout: { x: 640, y: 160, width: 420, height: 320 },
+      visible: true,
+      props: {
+        title: '图表样式测试',
+        subTitle: 'MACARON + ROUND',
+        chartHeight: '240px',
+        theme: 'macaron',
+        options: {
+          tooltip: { trigger: 'axis' },
+          grid: { left: 48, right: 24, top: 24, bottom: 48 },
+          xAxis: { type: 'category', data: ['A', 'B', 'C', 'D', 'E'] },
+          yAxis: { type: 'value' },
+          series: [
+            { name: '销量', data: [35, 62, 48, 88, 56], type: 'bar' },
+            { name: '趋势', data: [30, 55, 70, 65, 90], type: 'line' }
+          ]
+        }
+      }
+    },
     {
       id: 'd1',
       type: 'decoration',
-      layout: { x: 640, y: 160, width: 220, height: 140 },
+      layout: { x: 1080, y: 160, width: 220, height: 140 },
       visible: true,
       props: { variant: 'corner' }
     }
@@ -268,7 +292,7 @@ const workshopSceneConfig: Scene3DConfig = {
       offset: [-4.0, 1.4, 0],
       title: '#4机',
       equipmentId: 'SRM004',
-      status: '故障',
+      status: '正常',
       statusType: 'normal',
       runningTime: '12.0 h',
       message: '当前设备完成工作',

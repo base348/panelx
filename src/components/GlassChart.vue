@@ -24,17 +24,19 @@ const props = withDefaults(
     subTitle?: string
     options: EChartsOption
     chartHeight?: string
-    theme?: 'dark' | 'light'
+    theme?: 'dark' | 'light' | 'macaron'
   }>(),
   {
     chartHeight: '100%',
-    theme: 'dark'
+    theme: 'macaron'
   }
 )
 
 const chartOptions = computed(() => props.options)
 const chartHeight = computed(() => props.chartHeight ?? '100%')
-const chartTheme = computed(() => (props.theme === 'dark' ? 'dark' : undefined))
+const chartTheme = computed(() =>
+  props.theme === 'macaron' ? 'macaron' : props.theme === 'dark' ? 'dark' : undefined
+)
 </script>
 
 <style scoped>
