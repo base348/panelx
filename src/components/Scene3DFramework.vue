@@ -7,7 +7,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { OrthographicCamera, PerspectiveCamera } from 'three'
 import { setup3D, ControlsStoryBoard, LayerDef, ModelLoadable } from '../framework'
 import type { World } from '../framework'
@@ -22,6 +22,7 @@ const props = defineProps<{
 const containerRef = ref<HTMLElement | null>(null)
 const containerId = computed(() => `panelx-3d-framework-${Math.random().toString(36).slice(2, 10)}`)
 let worldInstance: World | null = null
+let resizeObserver: ResizeObserver | null = null
 
 function getModelsConfig(): Model3DItemConfig[] {
   return props.config?.models ?? []
@@ -96,6 +97,11 @@ onMounted(() => {
       }
       storyBoard.enableControls(world.getRendererDom())
       world.sceneTo(storyBoard)
+      nextTick(() => world.notifyResize())
+      if (el) {
+        resizeObserver = new ResizeObserver(() => world.notifyResize())
+        resizeObserver.observe(el)
+      }
     },
     (): Model[] =>
       modelsConfig.map((m) => new ModelLoadable(m.id, m.format ?? 'gltf', m.source))
@@ -103,6 +109,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
   if (worldInstance) {
     worldInstance.destroy()
     worldInstance = null

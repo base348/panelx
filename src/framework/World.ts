@@ -77,10 +77,12 @@ export class World {
         this.renderer.autoClear = false
         // this.renderer.setClearAlpha(0.1)
         // this.renderer.setClearColor(0x000000, 1)
-        this.renderer.domElement.style.transform = `translateY(${window.scrollY}px)`
         this.renderer.domElement.style.display = 'block'
         this.renderer.domElement.style.width = '100%'
         this.renderer.domElement.style.height = '100%'
+        this.renderer.domElement.style.position = 'absolute'
+        this.renderer.domElement.style.left = '0'
+        this.renderer.domElement.style.top = '0'
         // 添加到容器
         this.container.appendChild(this.renderer.domElement)
 
@@ -198,10 +200,15 @@ export class World {
     }
 
     private onWindowResize() {
-
         let size = this.getSize()
-        this.renderer.setSize(size.x,size.y)
+        this.renderer.setSize(size.x, size.y)
+        this.cssRenderer.setSize(size.x, size.y)
         this.windowSize = size
         this.windowSizeVersion++
+    }
+
+    /** 供外部在容器尺寸变化时调用，使 3D 画布与容器一致并居中 */
+    notifyResize(): void {
+        this.onWindowResize()
     }
 }
