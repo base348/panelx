@@ -50,7 +50,7 @@ import type {
 } from '../types/dashboard'
 import type { DesignRect } from '../types/size'
 import Scene3DFramework from './Scene3DFramework.vue'
-import { getWidgetComponent } from './widgetRegistry'
+import { getWidgetComponent } from '../widgets'
 
 const props = defineProps<{
   config: DashboardConfig
