@@ -34,6 +34,12 @@
         >
           演示验证
         </button>
+        <button
+          :class="{ active: view === 'configurable' }"
+          @click="view = 'configurable'"
+        >
+          配置加载大屏
+        </button>
       </nav>
     </header>
     <main class="panelx-demo-main">
@@ -55,6 +61,12 @@
       <div v-else-if="view === 'scene3d'" class="panelx-demo-scene3d">
         <Scene3DFramework :config="scene3DConfig" />
       </div>
+      <div
+        v-else-if="view === 'configurable'"
+        class="panelx-demo-screen panelx-demo-configurable"
+      >
+        <DashboardWithLoader />
+      </div>
       <VerifyDemo v-else class="panelx-demo-verify" />
     </main>
   </div>
@@ -63,13 +75,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Editor } from './editor'
-import { Dashboard, Scene3DFramework } from './components'
+import { Dashboard, DashboardWithLoader, Scene3DFramework } from './components'
 import { VerifyDemo } from './demo'
 import { LayerDef } from './framework'
 import { convertDashboardConfigPxToPercent } from './core/size'
 import type { DashboardConfig, Scene3DConfig } from './types/dashboard'
 
-const view = ref<'editor' | 'screen' | 'scene3d' | 'workshop' | 'verify'>('editor')
+const view = ref<'editor' | 'screen' | 'scene3d' | 'workshop' | 'verify' | 'configurable'>('editor')
 const isStandaloneWorkshop = ref(false)
 
 function openWorkshopTab() {
@@ -382,6 +394,15 @@ body {
   padding: 0;
   align-items: stretch;
   justify-content: stretch;
+}
+.panelx-demo-configurable {
+  padding: 0;
+  align-items: stretch;
+  justify-content: stretch;
+}
+.panelx-demo-configurable .panelx-dashboard-with-loader {
+  width: 100%;
+  height: 100%;
 }
 .panelx-demo-screen .panelx-dashboard-wrap {
   width: 100%;

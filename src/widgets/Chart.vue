@@ -7,7 +7,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { registerEchartsMacaronTheme, mergeMacaronRoundOptions } from '../theme/echartsMacaron'
 import type { ChartProps } from '../types/components'
@@ -15,6 +15,7 @@ import type { ChartProps } from '../types/components'
 const props = defineProps<ChartProps>()
 const chartRef = ref<HTMLElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
+let resizeObserver: ResizeObserver | null = null
 
 const width = props.width || '100%'
 const height = props.height || '25rem'
@@ -34,8 +35,20 @@ function initChart() {
   chartInstance.setOption(getOptionsToSet())
 }
 
+function resizeChart() {
+  if (chartInstance?.getDom()) {
+    chartInstance.resize()
+  }
+}
+
 onMounted(() => {
   initChart()
+  nextTick(() => {
+    if (!chartRef.value) return
+    resizeChart()
+    resizeObserver = new ResizeObserver(() => resizeChart())
+    resizeObserver.observe(chartRef.value)
+  })
 })
 
 watch(() => props.theme, () => {
@@ -55,6 +68,8 @@ watch(() => props.loading, (loading) => {
 })
 
 onUnmounted(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null

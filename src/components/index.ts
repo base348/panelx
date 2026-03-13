@@ -1,6 +1,7 @@
 import Grid from './Grid.vue'
 import GridItem from './GridItem.vue'
 import Dashboard from './Dashboard.vue'
+import DashboardWithLoader from './DashboardWithLoader.vue'
 import Scene3D from './Scene3D.vue'
 import Scene3DFramework from './Scene3DFramework.vue'
 import {
@@ -22,6 +23,7 @@ export {
   Table,
   Decoration,
   Dashboard,
+  DashboardWithLoader,
   Scene3D,
   Scene3DFramework
 }
@@ -37,6 +39,7 @@ export default {
   Table,
   Decoration,
   Dashboard,
+  DashboardWithLoader,
   Scene3D,
   Scene3DFramework
 }
