@@ -1,6 +1,25 @@
 <template>
   <div class="panelx-editor">
     <aside class="panelx-editor-sidebar">
+      <h3>尺寸</h3>
+      <div class="panelx-editor-field">
+        <label>宽度 (px)</label>
+        <input
+          v-model.number="config.design.width"
+          type="number"
+          min="1"
+          step="1"
+        />
+      </div>
+      <div class="panelx-editor-field">
+        <label>高度 (px)</label>
+        <input
+          v-model.number="config.design.height"
+          type="number"
+          min="1"
+          step="1"
+        />
+      </div>
       <h3>组件</h3>
       <div
         v-for="item in widgetList"
@@ -196,6 +215,8 @@ const rulerTopRef = ref<HTMLElement | null>(null)
 const rulerLeftRef = ref<HTMLElement | null>(null)
 
 let dragItem: RegisteredWidgetDef | null = null
+
+let isDebug = false
 
 /** 设计稿尺寸 */
 const designSize = computed(() => ({
@@ -411,11 +432,14 @@ function onDrop(e: DragEvent) {
   config.widgets2D.push(w)
   selectedId.value = id
   const sampleImageUrl = getWidgetSampleImageUrl(dragItem.sampleImage)
-  console.log('[Editor] 创建 widget 实例', {
+  if (isDebug) {
+    console.log('[Editor] 创建 widget 实例', {
     widget: { id: w.id, type: w.type, layout: w.layout },
     registeredWidget: { type: dragItem.type, label: dragItem.label, sampleImage: dragItem.sampleImage },
     resolvedSampleImageUrl: sampleImageUrl ?? '(空)'
   })
+  }
+  
   dragItem = null
 }
 
@@ -563,7 +587,7 @@ function loadDemo() {
 
 async function loadWorkshopConfig() {
   const mod = await import('../demo/dashboard_config.json')
-  const loaded = mod.default as DashboardConfig
+  const loaded = mod.default as unknown as DashboardConfig
   config.design = { ...loaded.design }
   config.backgroundLayer = loaded.backgroundLayer ? JSON.parse(JSON.stringify(loaded.backgroundLayer)) : undefined
   config.widgets2D = JSON.parse(JSON.stringify(loaded.widgets2D))
