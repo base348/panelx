@@ -1,4 +1,11 @@
-export { widgetComponentMap, getWidgetComponent } from './widgetRegistry'
+export {
+  widgetComponentMap,
+  getWidgetComponent,
+  widgetTypeReg,
+  getWidgetDefaultProps,
+  getWidgetPropConfig,
+  getWidgetTypeReg
+} from './widgetRegistry'
 export { default as Chart } from './Chart.vue'
 export { default as Table } from './Table.vue'
 export { default as Decoration } from './Decoration.vue'

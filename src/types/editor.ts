@@ -10,12 +10,26 @@ export interface RegisteredWidgetDef {
   defaultSize: { width: number; height: number }
   /** 可选：在编辑器组件列表中展示的示例图 URL，如 /editor-samples/stat.png */
   sampleImage?: string
-  /** 可选：该 widget 的默认 props，拖入时使用 */
+  /** 可选：该 widget 的默认 props，拖入时使用（优先级低于 widgetPropData.defaultParams） */
   defaultProps?: Record<string, unknown>
 }
 
-/** 编辑器配置文件结构：可注册的 widget 列表等 */
+/**
+ * 编辑器内 prop 数据：默认参数 + 预留 dashboard 数据
+ * - defaultParams：按类型配置默认参数，拖入画布时优先使用
+ * - dashboardData：预留，后续支持按 widget id 的 dashboard 运行时数据
+ */
+export interface WidgetPropData {
+  /** 按 widget 类型配置的默认参数，拖入时优先于 registeredWidgets[].defaultProps 与 registry */
+  defaultParams?: Partial<Record<WidgetType2D, Record<string, unknown>>>
+  /** 预留：按 widget id 的 dashboard 数据，后续加载/保存 dashboard 时与 Dashboard.widgetData 对接 */
+  dashboardData?: Record<string, Record<string, unknown>>
+}
+
+/** 编辑器配置文件结构：可注册的 widget 列表、prop 数据等 */
 export interface EditorConfig {
   /** 可注册的 2D 组件列表，顺序即侧边栏展示顺序 */
   registeredWidgets: RegisteredWidgetDef[]
+  /** 可选：prop 数据（默认参数 + 预留 dashboard 数据） */
+  widgetPropData?: WidgetPropData
 }

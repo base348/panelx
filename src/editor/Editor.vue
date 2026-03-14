@@ -133,42 +133,78 @@
       </div>
       <template v-if="selectedConfig">
         <div class="panelx-editor-prop-group">
-          <h4>布局（设计稿像素）</h4>
-          <div class="panelx-editor-field">
-            <label>X</label>
+          <h4>矩形 (x, y, w, h)</h4>
+          <div class="panelx-editor-rect-row">
             <input
               v-model.number="selectedConfig.layout.x"
               type="number"
               min="0"
               step="1"
+              title="x"
+              placeholder="x"
             />
-          </div>
-          <div class="panelx-editor-field">
-            <label>Y</label>
             <input
               v-model.number="selectedConfig.layout.y"
               type="number"
               min="0"
               step="1"
+              title="y"
+              placeholder="y"
             />
-          </div>
-          <div class="panelx-editor-field">
-            <label>宽度</label>
             <input
               v-model.number="selectedConfig.layout.width"
               type="number"
               min="1"
               step="1"
+              title="宽度"
+              placeholder="w"
             />
-          </div>
-          <div class="panelx-editor-field">
-            <label>高度</label>
             <input
               v-model.number="selectedConfig.layout.height"
               type="number"
               min="1"
               step="1"
+              title="高度"
+              placeholder="h"
             />
+          </div>
+        </div>
+        <div v-if="propConfigList.length" class="panelx-editor-prop-group">
+          <h4>组件属性</h4>
+          <div
+            v-for="propDef in propConfigList"
+            :key="propDef.key"
+            class="panelx-editor-field"
+          >
+            <label :title="propDef.key">{{ propDef.label }}</label>
+            <template v-if="propDef.type === 'string'">
+              <input
+                type="text"
+                :value="getProp(selectedConfig, propDef)"
+                @input="setProp(selectedConfig, propDef, ($event.target as HTMLInputElement).value)"
+              />
+            </template>
+            <template v-else-if="propDef.type === 'number'">
+              <input
+                type="number"
+                :value="getProp(selectedConfig, propDef)"
+                @input="setProp(selectedConfig, propDef, Number((($event.target as HTMLInputElement).value)))"
+              />
+            </template>
+            <template v-else-if="propDef.type === 'boolean'">
+              <input
+                type="checkbox"
+                :checked="!!getProp(selectedConfig, propDef)"
+                @change="setProp(selectedConfig, propDef, ($event.target as HTMLInputElement).checked)"
+              />
+            </template>
+            <template v-else-if="propDef.type === 'object' || propDef.type === 'array'">
+              <textarea
+                class="panelx-editor-prop-json"
+                :value="JSON.stringify(getProp(selectedConfig, propDef), null, 2)"
+                @blur="setPropFromJson(selectedConfig, propDef, ($event.target as HTMLTextAreaElement).value)"
+              />
+            </template>
           </div>
         </div>
         <details class="panelx-editor-json-detail">
@@ -186,6 +222,8 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import type { DashboardConfig, WidgetConfig2D, WidgetType2D } from '../types/dashboard'
 import type { EditorConfig, RegisteredWidgetDef } from '../types/editor'
 import { getWidgetSampleImageUrl } from '../assets/editor-samples'
+import { getWidgetDefaultProps, getWidgetPropConfig } from '../widgets/widgetRegistry'
+import type { WidgetPropDef } from '../types/widgets'
 import SizeSettingsDialog from './SizeSettingsDialog.vue'
 
 const DESIGN = { width: 1920, height: 1080 }
@@ -513,42 +551,46 @@ function defaultLayout(def: RegisteredWidgetDef, index: number): { x: number; y:
   }
 }
 
+/** 解析默认 props：widgetPropData.defaultParams[type] > registeredWidgets[].defaultProps > registry */
 function defaultProps(def: RegisteredWidgetDef): Record<string, unknown> {
+  const fromConfig = editorConfig.value?.widgetPropData?.defaultParams?.[def.type]
+  if (fromConfig && Object.keys(fromConfig).length > 0) return { ...fromConfig }
   if (def.defaultProps && Object.keys(def.defaultProps).length > 0) return { ...def.defaultProps }
-  return builtinDefaultProps(def.type)
-}
-
-function builtinDefaultProps(type: WidgetType2D): Record<string, unknown> {
-  switch (type) {
-    case 'chart':
-      return { options: { xAxis: { type: 'category', data: ['A', 'B', 'C'] }, yAxis: { type: 'value' }, series: [{ data: [120, 200, 150], type: 'bar' }] }, height: '100%', width: '100%' }
-    case 'table':
-      return { columns: [{ key: 'name', title: '名称' }, { key: 'value', title: '数值' }], data: [{ name: '项目1', value: 100 }, { name: '项目2', value: 200 }] }
-    case 'decoration':
-      return { variant: 'corner' }
-    case 'stat':
-      return { value: 0, label: '指标' }
-    case 'card':
-      return { title: '卡片' }
-    case 'panel':
-      return { title: '面板' }
-    case 'glassChart':
-      return { title: '图表', subTitle: 'CHART', options: { xAxis: { type: 'category', data: ['A', 'B', 'C'] }, yAxis: { type: 'value' }, series: [{ data: [120, 200, 150], type: 'bar' }] } }
-    case 'deviceCard':
-      return { items: [{ label: '设备', value: '-', icon: '▸' }] }
-    case 'progressList':
-      return { title: '进度', subTitle: 'PROGRESS', items: [{ label: '项1', value: '100', percent: 60 }] }
-    case 'scaleRuler':
-      return {}
-    default:
-      return {}
-  }
+  return getWidgetDefaultProps(def.type)
 }
 
 const selectedConfig = computed(() => {
   if (!selectedId.value) return null
   return config.widgets2D.find((w) => w.id === selectedId.value) ?? null
 })
+
+/** 当前选中组件的 prop 配置列表，供右侧栏渲染 */
+const propConfigList = computed(() => {
+  if (!selectedConfig.value) return []
+  return getWidgetPropConfig(selectedConfig.value.type)
+})
+
+/** 读取组件 props 中的某一项，无则回退到 propDef.default */
+function getProp(w: WidgetConfig2D, propDef: WidgetPropDef): unknown {
+  const v = (w.props ?? {})[propDef.key]
+  return v !== undefined && v !== null ? v : propDef.default
+}
+
+/** 写入组件 props，确保 props 对象存在 */
+function setProp(w: WidgetConfig2D, propDef: WidgetPropDef, value: unknown) {
+  if (!w.props) w.props = {}
+  w.props[propDef.key] = value
+}
+
+/** object/array 类型：从 JSON 字符串解析并写入，失败则忽略 */
+function setPropFromJson(w: WidgetConfig2D, propDef: WidgetPropDef, raw: string) {
+  try {
+    const v = raw.trim() ? JSON.parse(raw) : propDef.default
+    setProp(w, propDef, v)
+  } catch {
+    // 解析失败不覆盖
+  }
+}
 
 const typeLabelByType = computed(() => {
   const map: Record<string, string> = {}
@@ -939,6 +981,24 @@ async function loadWorkshopConfig() {
   font-weight: 600;
   color: #333;
 }
+.panelx-editor-rect-row {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.panelx-editor-rect-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.375rem 0.25rem;
+  border: 0.0625rem solid #ddd;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  text-align: center;
+  box-sizing: border-box;
+}
+.panelx-editor-rect-row input::placeholder {
+  color: #999;
+}
 .panelx-editor-field {
   margin-bottom: 0.5rem;
 }
@@ -955,6 +1015,17 @@ async function loadWorkshopConfig() {
   border: 0.0625rem solid #ddd;
   border-radius: 0.25rem;
   font-size: 0.8125rem;
+  box-sizing: border-box;
+}
+.panelx-editor-field .panelx-editor-prop-json {
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.375rem 0.5rem;
+  border: 0.0625rem solid #ddd;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  resize: vertical;
   box-sizing: border-box;
 }
 .panelx-editor-field .panelx-editor-select {

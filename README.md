@@ -43,3 +43,84 @@ grid-template-columns: 25% 50% 25%;
 /* 示例：左侧更窄、主区域更宽 */
 grid-template-columns: 20% 60% 20%;
 ```
+
+## 编辑器 Widget 默认 Props 配置
+
+每个 widget 的 props 不同，拖入画布时需要一套默认值。可选方案如下：
+
+### 方案一：配置文件（推荐）
+
+在 **`src/demo/editor_config.json`** 的 `registeredWidgets` 里，为每种组件配置 **`defaultProps`**（以及 `defaultSize`）：
+
+- **`defaultSize`**：拖入时的默认宽高（设计稿 px）。
+- **`defaultProps`**：该类型对应的默认属性对象，拖入时作为 `widget.props` 的初始值。
+
+编辑器启动时会加载该 JSON；若某项未配置 `defaultProps` 或为空对象，则使用代码兜底（见方案二）。  
+修改 JSON 即可调整默认值，**无需改代码**。
+
+示例：
+
+```json
+{
+  "type": "stat",
+  "label": "指标",
+  "defaultSize": { "width": 280, "height": 100 },
+  "defaultProps": { "value": 0, "label": "指标" }
+}
+```
+
+### 方案二：代码兜底（Widget Registry）
+
+当 `editor_config.json` 里某 type 没有 `defaultProps` 或为空时，编辑器会使用 **Widget 注册表** 中的默认值：  
+**`src/widgets/widgetPropConfig.ts`** 为每种 `WidgetType2D` 配置了 **`defaultProps`** 与 **`propConfig`**，通过 **`getWidgetDefaultProps(type)`**（见 `src/widgets/widgetRegistry.ts`）获取。  
+适合：新增 widget 类型时在注册表里维护默认值与属性定义，保证未配置 JSON 时仍有可用默认值。
+
+### 方案三（扩展思路）
+
+- 将默认值抽到独立文件（如 `widget-defaults.json`），由 editor 与 `editor_config.json` 一起加载、合并。
+- 在编辑器内提供「按类型编辑默认值」的 UI，将结果写回配置文件或通过接口保存，便于运营/设计自行维护。
+
+## Widget 数据集成
+
+Dashboard 与编辑器通过**统一 prop 配置**和**按 widget id 的数据存储**打通配置与运行时数据，便于展示、编辑与后期数据更新。
+
+### 1. 统一 Prop 配置（Registry）
+
+- **类型**（`src/types/widgets.ts`）  
+  - **`WidgetPropDef`**：单个属性的定义（`key`、`label`、`type`、`default`），供编辑器展示与解析 config。  
+  - **`WidgetTypeRegItem`**：某类 widget 的 `defaultProps` + `propConfig` 数组。
+
+- **实现**（`src/widgets/widgetPropConfig.ts`）  
+  为每种 `WidgetType2D` 配置 `defaultProps` 与 `propConfig`。  
+  - **`getWidgetDefaultProps(type)`**：拖入画布或解析 config 时使用的默认 props。  
+  - **`getWidgetPropConfig(type)`**：该类型所有可编辑属性的定义，供 Editor 右侧属性栏按 key/label/type 渲染（可后续接入）。
+
+- **入口**（`src/widgets/widgetRegistry.ts`）  
+  对外提供 `getWidgetTypeReg(type)`、`getWidgetDefaultProps`、`getWidgetPropConfig`。
+
+### 2. Dashboard 按 widget id 的数据
+
+- **`widgetData`**（`src/components/Dashboard.vue`）  
+  - 类型：`Ref<WidgetDataMap>`，即 `Record<widgetId, Record<string, unknown>>`。  
+  - 配置加载后，由 **`syncWidgetDataFromConfig()`** 根据当前 `config.widgets2D` 填充：每个 widget 的 `widgetData[id] = { ...w.props }`。  
+  - 渲染时通过 **`getWidgetProps(w)`** 取数：优先 `widgetData[w.id]`，无则回退到 `w.props`，模板使用 `v-bind="getWidgetProps(w)"`。
+
+- **provide / inject**（类型见 `src/types/injections.ts`）  
+  - **`WidgetDataKey`**：注入后得到 `Ref<WidgetDataMap>`，只读当前所有 widget 数据。  
+  - **`SetWidgetDataKey`**：注入后得到 **`SetWidgetDataFn`**，即 `(id, patch) => void`，按 widget id 局部更新数据（合并 patch 到该 id 的 props），便于后期「配置数据更新」而不改 config。
+
+子组件或外部使用示例：
+
+```ts
+import { inject } from 'vue'
+import { WidgetDataKey, SetWidgetDataKey } from '@/types/injections'
+
+const widgetData = inject(WidgetDataKey)       // Ref<WidgetDataMap> | undefined
+const setWidgetData = inject(SetWidgetDataKey) // SetWidgetDataFn | undefined
+
+// 按 id 更新某 widget 数据
+setWidgetData?.('stat-1', { value: 123, label: '产量' })
+```
+
+- **类型导出**（`src/types/widgets.ts`）  
+  **`WidgetDataMap`**、**`SetWidgetDataFn`** 已导出，与 **`WidgetDataKey`**、**`SetWidgetDataKey`** 一起供全项目做类型约束。

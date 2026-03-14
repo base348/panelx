@@ -1,8 +1,9 @@
 /**
- * 2D Widget 类型与组件的注册表，供 Dashboard 等使用
+ * 2D Widget 类型与组件的注册表，供 Dashboard、Editor 等使用
  */
 
 import type { WidgetType2D } from '../types/dashboard'
+import type { WidgetTypeRegItem } from '../types/widgets'
 import Chart from './Chart.vue'
 import Table from './Table.vue'
 import Decoration from './Decoration.vue'
@@ -36,4 +37,17 @@ export const widgetComponentMap: Record<WidgetType2D, unknown> = {
 /** 根据类型取组件，未注册时回退为 Panel */
 export function getWidgetComponent(type: WidgetType2D): unknown {
   return widgetComponentMap[type] ?? Panel
+}
+
+import {
+  widgetTypeReg,
+  getWidgetDefaultProps,
+  getWidgetPropConfig
+} from './widgetPropConfig'
+
+export { widgetTypeReg, getWidgetDefaultProps, getWidgetPropConfig }
+
+/** 根据类型取完整注册信息（defaultProps + propConfig），供 Editor 展示与解析 config */
+export function getWidgetTypeReg(type: WidgetType2D): WidgetTypeRegItem {
+  return widgetTypeReg[type] ?? { defaultProps: {}, propConfig: [] }
 }

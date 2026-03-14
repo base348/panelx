@@ -30,7 +30,7 @@
         >
           <component
             :is="getComponent(w.type)"
-            v-bind="(w.props || {}) as Record<string, unknown>"
+            v-bind="(getWidgetProps(w)) as Record<string, unknown>"
           />
         </div>
       </template>
@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, provide } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import { SizeManager2D } from '../core/size'
 import { getViewportAndScale, pxToVw, pxToVh, pxToRem } from '../utils/viewport'
 import type {
@@ -49,6 +49,7 @@ import type {
   BackgroundLayerImage
 } from '../types/dashboard'
 import type { DesignRect } from '../types/size'
+import { WidgetDataKey, SetWidgetDataKey } from '../types/injections'
 import Scene3DFramework from './Scene3DFramework.vue'
 import { getWidgetComponent } from '../widgets'
 
@@ -82,6 +83,43 @@ const design = computed(() => config.value.design)
 const visibleWidgets = computed(() =>
   (config.value.widgets2D || []).filter((w) => w.visible !== false)
 )
+
+/** 按 widget id 预置的数据，配置加载后从 config 填充，便于后续数据更新 */
+const widgetData = ref<Record<string, Record<string, unknown>>>({})
+
+/** 配置加载后同步 widgetData：为每个 widget id 写入其 props，便于后续数据更新只改 widgetData 而不动 config */
+function syncWidgetDataFromConfig() {
+  const list = config.value.widgets2D || []
+  const next: Record<string, Record<string, unknown>> = {}
+  for (const w of list) {
+    next[w.id] = { ...(w.props ?? {}) }
+  }
+  widgetData.value = next
+}
+
+watch(
+  () => config.value.widgets2D?.length ?? 0,
+  () => syncWidgetDataFromConfig(),
+  { immediate: true }
+)
+watch(
+  () => config.value.widgets2D?.map((w) => w.id).join(',') ?? '',
+  () => syncWidgetDataFromConfig()
+)
+
+/** 供模板使用：优先取 widgetData[id]，无则回退到 config 中的 props */
+function getWidgetProps(w: WidgetConfig2D): Record<string, unknown> {
+  const data = widgetData.value[w.id]
+  if (data && Object.keys(data).length > 0) return data
+  return (w.props ?? {}) as Record<string, unknown>
+}
+
+/** 按 widget id 的数据供外部注入使用；配置加载后已填充，便于后续数据更新 */
+provide(WidgetDataKey, widgetData)
+provide(SetWidgetDataKey, (id: string, patch: Record<string, unknown>) => {
+  const cur = widgetData.value[id]
+  widgetData.value = { ...widgetData.value, [id]: { ...(cur ?? {}), ...patch } }
+})
 
 const backgroundImageStyle = computed((): Record<string, string> => {
   const bg = config.value.backgroundLayer
