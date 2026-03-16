@@ -75,8 +75,13 @@
       <template v-if="widgets3D.length">
         <h3 class="panelx-editor3d-section">已添加</h3>
         <ul class="panelx-editor3d-widget-list">
-          <li v-for="w in widgets3D" :key="w.id" class="panelx-editor3d-widget-tag">
-            <span class="panelx-editor3d-widget-tag-text">
+          <li
+            v-for="w in widgets3D"
+            :key="w.id"
+            class="panelx-editor3d-widget-tag"
+            :class="{ active: selectedWidgetId === w.id }"
+          >
+            <span class="panelx-editor3d-widget-tag-text" @click="onSelectWidget(w)">
               {{ w.id }} · {{ (w.props?.position as number[] | undefined)?.join(',') ?? '-' }} · 缩放
               {{ (w.props?.scale as number) ?? '-' }}
             </span>
@@ -90,6 +95,46 @@
             </button>
           </li>
         </ul>
+        <div v-if="selectedWidgetId" class="panelx-editor3d-pos-editor">
+          <div class="panelx-editor3d-pos-row">
+            <span class="panelx-editor3d-size-label">位置</span>
+            <div class="panelx-editor3d-size-inputs">
+              <label>
+                X
+                <input
+                  v-model.number="selectedPosition.x"
+                  type="number"
+                  step="any"
+                  :disabled="axisLock.x"
+                  @change="onPositionInputChange('x')"
+                />
+                <input type="checkbox" v-model="axisLock.x" title="锁定 X" />
+              </label>
+              <label>
+                Y
+                <input
+                  v-model.number="selectedPosition.y"
+                  type="number"
+                  step="any"
+                  :disabled="axisLock.y"
+                  @change="onPositionInputChange('y')"
+                />
+                <input type="checkbox" v-model="axisLock.y" title="锁定 Y" />
+              </label>
+              <label>
+                Z
+                <input
+                  v-model.number="selectedPosition.z"
+                  type="number"
+                  step="any"
+                  :disabled="axisLock.z"
+                  @change="onPositionInputChange('z')"
+                />
+                <input type="checkbox" v-model="axisLock.z" title="锁定 Z" />
+              </label>
+            </div>
+          </div>
+        </div>
       </template>
     </aside>
     <main
@@ -250,8 +295,20 @@ const pendingTransforms = new Map<string, { position: [number, number, number]; 
 /** widget id -> 已加入场景的 Object3D（用于删除时从 scene 移除） */
 const addedModelNodes = new Map<string, Object3D>()
 
+const selectedWidgetId = ref<string | null>(null)
+const selectedPosition = reactive<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 })
+const axisLock = reactive<{ x: boolean; y: boolean; z: boolean }>({ x: false, y: false, z: false })
+
 /** 主区域是否处于拖拽悬停 */
 const isDragOver = ref(false)
+
+function onSelectWidget(w: WidgetConfig3D): void {
+  selectedWidgetId.value = w.id
+  const pos = (w.props?.position as [number, number, number] | undefined) ?? [0, 0, 0]
+  selectedPosition.x = pos[0] ?? 0
+  selectedPosition.y = pos[1] ?? 0
+  selectedPosition.z = pos[2] ?? 0
+}
 
 /** 模型类型拖入：拖起时写入 payload */
 function onDragStartType(e: DragEvent, item: ModelTypeDefinition) {
@@ -471,6 +528,29 @@ function deleteWidget(w: WidgetConfig3D): void {
   if (obj && storyboardRef.value) {
     storyboardRef.value.scene.remove(obj)
     addedModelNodes.delete(id)
+  }
+  if (selectedWidgetId.value === id) {
+    selectedWidgetId.value = null
+  }
+}
+
+function onPositionInputChange(axis: 'x' | 'y' | 'z'): void {
+  const id = selectedWidgetId.value
+  if (!id) return
+  if (axisLock[axis]) return
+  const arr = config.widgets3D
+  const w = arr?.find((item) => item.id === id)
+  if (!w) return
+  if (!w.props) w.props = {}
+  const pos = (w.props.position as [number, number, number] | undefined) ?? [0, 0, 0]
+  const next: [number, number, number] = [pos[0] ?? 0, pos[1] ?? 0, pos[2] ?? 0]
+  const idx = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+  const value = axis === 'x' ? selectedPosition.x : axis === 'y' ? selectedPosition.y : selectedPosition.z
+  next[idx] = Number(value) || 0
+  w.props.position = next
+  const obj = addedModelNodes.get(id)
+  if (obj) {
+    obj.position.set(next[0], next[1], next[2])
   }
 }
 
@@ -707,6 +787,9 @@ function exportConfig() {
   color: #94a3b8;
   font-size: 0.8125rem;
 }
+.panelx-editor3d-widget-tag.active {
+  border: 1px solid #38bdf8;
+}
 .panelx-editor3d-widget-tag-text {
   flex: 1;
   min-width: 0;
@@ -728,6 +811,16 @@ function exportConfig() {
   background: #dc2626;
   border-color: #dc2626;
   color: #fff;
+}
+.panelx-editor3d-pos-editor {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px dashed rgba(148, 163, 184, 0.4);
+}
+.panelx-editor3d-pos-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 /* 放下后弹出的对话框 */
