@@ -1,6 +1,47 @@
 <template>
   <div class="panelx-editor3d">
     <aside class="panelx-editor3d-sidebar">
+      <h3>场景尺寸</h3>
+      <div class="panelx-editor3d-size-display">
+        <div class="panelx-editor3d-size-row">
+          <span class="panelx-editor3d-size-label">Dashboard</span>
+          <span class="panelx-editor3d-size-value">{{ designSize.width }} × {{ designSize.height }}</span>
+        </div>
+        <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
+          <span class="panelx-editor3d-size-label">WorldSize</span>
+          <div class="panelx-editor3d-size-inputs">
+            <label>
+              X
+              <input v-model.number="sceneWorldSize.x" type="number" step="any" />
+            </label>
+            <label>
+              Y
+              <input v-model.number="sceneWorldSize.y" type="number" step="any" />
+            </label>
+            <label>
+              Z
+              <input v-model.number="sceneWorldSize.z" type="number" step="any" />
+            </label>
+          </div>
+        </div>
+        <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
+          <span class="panelx-editor3d-size-label">Lights</span>
+          <div class="panelx-editor3d-size-inputs">
+            <label>
+              Amb
+              <input v-model.number="sceneLights.ambient" type="number" step="0.1" />
+            </label>
+            <label>
+              Hem
+              <input v-model.number="sceneLights.hemisphere" type="number" step="0.1" />
+            </label>
+            <label>
+              Pt
+              <input v-model.number="sceneLights.point" type="number" step="0.1" />
+            </label>
+          </div>
+        </div>
+      </div>
       <h3>模型类型</h3>
       <div
         v-for="item in modelTypeList"
@@ -59,7 +100,7 @@
       @drop.prevent="onDrop"
     >
       <div class="panelx-editor3d-canvas">
-        <div class="panelx-editor3d-world-wrap">
+        <div class="panelx-editor3d-world-wrap" :style="worldOuterStyle">
           <div id="panelx-editor3d-world" class="panelx-editor3d-world" />
           <div v-if="!widgets3D.length" class="panelx-editor3d-world-hint">
             拖入左侧模型到此处，放下后填写位置与缩放
@@ -93,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { reactive, computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { modelRegistry, setup3D } from '../framework'
 import type { DashboardConfig, WidgetConfig3D } from '../types/dashboard'
 import type { ModelTypeDefinition } from '../framework'
@@ -104,11 +145,72 @@ import { BaseStoryBoard } from '../framework/storyboard/BaseStoryBoard'
 import { ControlsStoryBoard } from '../framework/storyboard/ControlsStoryBoard'
 import type { StoryBoard } from '../framework'
 import type { Model } from '../framework'
+import { ModelLoadable } from '../framework/model/ModelLoadable'
 
 /** 预设模型列表（由 examples 等注入），在侧栏「可用模型」中展示 */
 defineProps<{
   presetModels?: Array<{ id: string; label: string; typeId: string; source?: string; name?: string }>
 }>()
+
+const DESIGN_SIZE_STORAGE_KEY = 'PanelX_DESIGN_SIZE'
+
+function getDesignSizeFromStorage(): { width: number; height: number } | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(DESIGN_SIZE_STORAGE_KEY)
+    if (!raw) return null
+    const o = JSON.parse(raw) as { width?: unknown; height?: unknown }
+    const w = Number(o?.width)
+    const h = Number(o?.height)
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) return null
+    return { width: Math.floor(w), height: Math.floor(h) }
+  } catch {
+    return null
+  }
+}
+
+const initialDesign = getDesignSizeFromStorage() ?? { width: 1920, height: 1080 }
+const designSize = reactive({ width: initialDesign.width, height: initialDesign.height })
+const sceneWorldSize = reactive<{ x: number; y: number; z: number }>({
+  x: initialDesign.width,
+  y: initialDesign.height,
+  z: 1000
+})
+const sceneLights = reactive<{ ambient: number; hemisphere: number; point: number }>({
+  ambient: 1.8,
+  hemisphere: 2.0,
+  point: 8.0
+})
+/** 父容器尺寸（跟随 dashboard 设计尺寸，只控制宽高比，不影响 3D 世界坐标系） */
+const worldOuterStyle = computed(() => {
+  const w = Math.max(1, Number(designSize.width) || 1920)
+  const h = Math.max(1, Number(designSize.height) || 1080)
+  return {
+    aspectRatio: `${w} / ${h}`,
+    maxWidth: '100%',
+    maxHeight: '100%'
+  }
+})
+
+/** 监听灯光配置变更，实时更新当前场景的灯光强度 */
+watch(
+  () => ({ ambient: sceneLights.ambient, hemisphere: sceneLights.hemisphere, point: sceneLights.point }),
+  (v) => {
+    const sb = storyboardRef.value as BaseStoryBoard | null
+    if (!sb) return
+    if (typeof v.ambient === 'number') {
+      sb.changeLight('ambientLight', v.ambient)
+    }
+    if (typeof v.hemisphere === 'number') {
+      sb.changeLight('hesLight', v.hemisphere)
+    }
+    if (typeof v.point === 'number') {
+      sb.changeLight('pointLight', v.point)
+      // pointLightFill 与 pointLight 同步
+      sb.changeLight('pointLightFill', v.point)
+    }
+  }
+)
 
 /** 拖拽 payload：模型类型 */
 interface DragPayloadType {
@@ -280,8 +382,23 @@ function addWidgetModelToScene(w: WidgetConfig3D): void {
   pendingTransforms.set(modelName, { position: [pos[0] ?? 0, pos[1] ?? 0, pos[2] ?? 0], scale: scaleVal })
 
   loader.getStore().addModel(modelName, model as unknown as Model)
-  // 触发加载；加载完成后由 onFrameworkLoaded 将其加入 scene
-  loader.load(model as unknown as Model)
+  if (model instanceof ModelLoadable) {
+    // 需要异步加载资源的模型（gltf/fbx 等），交给 Loader，加载完成后在 onFrameworkLoaded 中统一加入场景
+    loader.load(model as unknown as Model)
+  } else {
+    // 内置/简单模型（如坐标轴）已经有 scene，直接同步加入当前 storyboard
+    const tf = pendingTransforms.get(modelName)
+    const inst = model as unknown as Model
+    if (inst.scene && tf) {
+      inst.scene.position.set(tf.position[0], tf.position[1], tf.position[2])
+      inst.scene.scale.setScalar(tf.scale)
+    }
+    ;(sb as BaseStoryBoard).addModel(inst)
+    addedModelNames.add(modelName)
+    if (inst.scene) {
+      addedModelNodes.set(modelName, inst.scene as unknown as Object3D)
+    }
+  }
 }
 
 function onFrameworkLoaded(loader: Loader, world: World): void {
@@ -289,8 +406,9 @@ function onFrameworkLoaded(loader: Loader, world: World): void {
   worldRef.value = world
 
   if (!storyboardRef.value) {
-    const orthoSize = 8
-    const aspect = 1
+    const aspect = sceneWorldSize.y > 0 ? sceneWorldSize.x / sceneWorldSize.y : 1
+    const baseSize = Math.max(sceneWorldSize.x, sceneWorldSize.y)
+    const orthoSize = baseSize > 0 ? baseSize / 100 : 8
     const cam = new OrthographicCamera(
       -orthoSize * aspect,
       orthoSize * aspect,
@@ -303,7 +421,12 @@ function onFrameworkLoaded(loader: Loader, world: World): void {
     cam.layers.enableAll()
     const sb = new ControlsStoryBoard('Editor3D', cam, {
       background: null,
-      orthographicSize: orthoSize
+      orthographicSize: orthoSize,
+      lights: {
+        ambient: sceneLights.ambient,
+        hemisphere: sceneLights.hemisphere,
+        point: sceneLights.point
+      }
     })
     sb.enableControls(world.getRendererDom())
     if (sb.controls) {
@@ -376,9 +499,16 @@ function exportConfig() {
       ? (config.widgets3D as WidgetConfig3D[]).map((w) => ({
           id: w.id,
           type: w.type,
-          worldSize: w.worldSize,
+          worldSize: w.worldSize ?? { x: sceneWorldSize.x, y: sceneWorldSize.y, z: sceneWorldSize.z },
           visible: w.visible,
-          props: w.props ? { ...w.props } : undefined
+          props: {
+            ...(w.props ? { ...w.props } : {}),
+            sceneLights: {
+              ambient: sceneLights.ambient,
+              hemisphere: sceneLights.hemisphere,
+              point: sceneLights.point
+            }
+          }
         }))
       : []
   }
@@ -415,6 +545,47 @@ function exportConfig() {
   margin: 0 0 0.5rem;
   font-size: 0.875rem;
   font-weight: 600;
+}
+.panelx-editor3d-size-display {
+  margin-bottom: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.375rem;
+  background: #0f172a;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.panelx-editor3d-size-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.panelx-editor3d-size-row-inputs {
+  margin-top: 0.25rem;
+}
+.panelx-editor3d-size-label {
+  flex-shrink: 0;
+}
+.panelx-editor3d-size-value {
+  font-weight: 500;
+}
+.panelx-editor3d-size-inputs {
+  display: flex;
+  gap: 0.25rem;
+}
+.panelx-editor3d-size-inputs label {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.panelx-editor3d-size-inputs input {
+  width: 3.2rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 0.25rem;
+  border: 1px solid #475569;
+  background: #020617;
+  color: #e2e8f0;
+  font-size: 0.75rem;
 }
 .panelx-editor3d-model-item {
   display: flex;

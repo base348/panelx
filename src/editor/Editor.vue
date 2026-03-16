@@ -258,6 +258,32 @@ import SizeSettingsDialog from './SizeSettingsDialog.vue'
 
 const DESIGN = { width: 1920, height: 1080 }
 
+const DESIGN_SIZE_STORAGE_KEY = 'PanelX_DESIGN_SIZE'
+
+function getDesignSizeFromStorage(): { width: number; height: number } | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(DESIGN_SIZE_STORAGE_KEY)
+    if (!raw) return null
+    const o = JSON.parse(raw) as { width?: unknown; height?: unknown }
+    const w = Number(o?.width)
+    const h = Number(o?.height)
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) return null
+    return { width: Math.floor(w), height: Math.floor(h) }
+  } catch {
+    return null
+  }
+}
+
+function saveDesignSizeToStorage(width: number, height: number): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(DESIGN_SIZE_STORAGE_KEY, JSON.stringify({ width, height }))
+  } catch {
+    // ignore
+  }
+}
+
 /** 内置默认组件列表（配置文件未加载或为空时使用） */
 const FALLBACK_WIDGETS: RegisteredWidgetDef[] = [
   { type: 'stat', label: '指标', defaultSize: { width: 280, height: 100 } },
@@ -274,7 +300,7 @@ const widgetList = computed(() => editorConfig.value?.registeredWidgets?.length 
 const datasourceList = computed(() => editorConfig.value?.datasources ?? [])
 
 const config = reactive<DashboardConfig>({
-  design: { ...DESIGN },
+  design: { ...(getDesignSizeFromStorage() ?? DESIGN) },
   widgets2D: []
 })
 
@@ -284,6 +310,7 @@ const designSizeUnit = ref<'px' | 'cm' | 'm' | 'km'>('px')
 function onSizeConfirm(payload: { width: number; height: number }) {
   config.design.width = payload.width
   config.design.height = payload.height
+  saveDesignSizeToStorage(payload.width, payload.height)
 }
 
 const dropRef = ref<HTMLElement | null>(null)
@@ -724,6 +751,7 @@ async function loadWorkshopConfig() {
   const loaded = mod.default as unknown as DashboardConfig
   setDebugFromConfig(loaded.debug ?? false)
   config.design = { ...loaded.design }
+  saveDesignSizeToStorage(loaded.design.width, loaded.design.height)
   config.backgroundLayer = loaded.backgroundLayer ? JSON.parse(JSON.stringify(loaded.backgroundLayer)) : undefined
   config.widgets2D = JSON.parse(JSON.stringify(loaded.widgets2D))
   selectedId.value = config.widgets2D[0]?.id ?? null
