@@ -1,35 +1,133 @@
 <template>
   <div class="panelx-editor3d">
     <aside class="panelx-editor3d-sidebar">
-      <h3>3D 组件</h3>
+      <h3>模型类型</h3>
       <div
         v-for="item in modelTypeList"
-        :key="item.id"
+        :key="'type-' + item.id"
         class="panelx-editor3d-model-item"
+        draggable="true"
         :title="`${item.label} (${item.id})`"
+        @dragstart="onDragStartType($event, item)"
       >
         <span class="panelx-editor3d-model-label">{{ item.label }}</span>
         <span v-if="item.category" class="panelx-editor3d-model-category">{{ item.category }}</span>
       </div>
+      <template v-if="presetModels?.length">
+        <h3 class="panelx-editor3d-section">可用模型（预设）</h3>
+        <div
+          v-for="p in presetModels"
+          :key="'preset-' + p.id"
+          class="panelx-editor3d-model-item panelx-editor3d-preset"
+          draggable="true"
+          :title="`${p.label} · ${p.typeId} · ${p.source}`"
+          @dragstart="onDragStartPreset($event, p)"
+        >
+          <span class="panelx-editor3d-model-label">{{ p.label }}</span>
+          <span class="panelx-editor3d-model-category">{{ p.typeId }}</span>
+        </div>
+      </template>
       <h3 class="panelx-editor3d-ops">操作</h3>
       <button type="button" class="panelx-editor3d-btn" @click="exportConfig">
         导出配置
       </button>
+      <template v-if="widgets3D.length">
+        <h3 class="panelx-editor3d-section">已添加</h3>
+        <ul class="panelx-editor3d-widget-list">
+          <li v-for="w in widgets3D" :key="w.id" class="panelx-editor3d-widget-tag">
+            <span class="panelx-editor3d-widget-tag-text">
+              {{ w.id }} · {{ (w.props?.position as number[] | undefined)?.join(',') ?? '-' }} · 缩放
+              {{ (w.props?.scale as number) ?? '-' }}
+            </span>
+            <button
+              type="button"
+              class="panelx-editor3d-widget-delete"
+              title="从主区域删除"
+              @click="deleteWidget(w)"
+            >
+              删除
+            </button>
+          </li>
+        </ul>
+      </template>
     </aside>
-    <main class="panelx-editor3d-main">
+    <main
+      class="panelx-editor3d-main"
+      :class="{ 'panelx-editor3d-main-drag-over': isDragOver }"
+      @dragover.prevent="isDragOver = true"
+      @dragleave="isDragOver = false"
+      @drop.prevent="onDrop"
+    >
       <div class="panelx-editor3d-canvas">
-        <span class="panelx-editor3d-placeholder">3D 编辑区域（逻辑后续添加）</span>
+        <div class="panelx-editor3d-world-wrap">
+          <div id="panelx-editor3d-world" class="panelx-editor3d-world" />
+          <div v-if="!widgets3D.length" class="panelx-editor3d-world-hint">
+            拖入左侧模型到此处，放下后填写位置与缩放
+          </div>
+        </div>
       </div>
     </main>
+
+    <!-- 放下后弹出的位置/缩放对话框 -->
+    <Teleport to="body">
+      <div v-if="dropDialogVisible" class="panelx-editor3d-dialog-mask" @click.self="closeDropDialog">
+        <div class="panelx-editor3d-dialog">
+          <h3 class="panelx-editor3d-dialog-title">设置位置与缩放</h3>
+          <p v-if="pendingDrop" class="panelx-editor3d-dialog-sub">{{ pendingDrop.label }}</p>
+          <div class="panelx-editor3d-dialog-form">
+            <label>位置 X <input v-model.number="dropForm.posX" type="number" step="any" /></label>
+            <label>位置 Y <input v-model.number="dropForm.posY" type="number" step="any" /></label>
+            <label>位置 Z <input v-model.number="dropForm.posZ" type="number" step="any" /></label>
+            <label>缩放 <input v-model.number="dropForm.scale" type="number" step="any" min="0.01" /></label>
+          </div>
+          <div class="panelx-editor3d-dialog-actions">
+            <button type="button" class="panelx-editor3d-dialog-btn" @click="closeDropDialog">取消</button>
+            <button type="button" class="panelx-editor3d-dialog-btn primary" @click="confirmDropDialog">
+              确定
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue'
-import { modelRegistry } from '../framework'
+import { reactive, computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { modelRegistry, setup3D } from '../framework'
 import type { DashboardConfig, WidgetConfig3D } from '../types/dashboard'
+import type { ModelTypeDefinition } from '../framework'
+import type { Loader } from '../framework'
+import type { World } from '../framework'
+import { Object3D, OrthographicCamera } from 'three'
+import { BaseStoryBoard } from '../framework/storyboard/BaseStoryBoard'
+import { ControlsStoryBoard } from '../framework/storyboard/ControlsStoryBoard'
+import type { StoryBoard } from '../framework'
+import type { Model } from '../framework'
 
-/** 注册的模型类型列表，供 3D 编辑器组件列表展示 */
+/** 预设模型列表（由 examples 等注入），在侧栏「可用模型」中展示 */
+defineProps<{
+  presetModels?: Array<{ id: string; label: string; typeId: string; source?: string; name?: string }>
+}>()
+
+/** 拖拽 payload：模型类型 */
+interface DragPayloadType {
+  kind: 'type'
+  id: string
+  label: string
+}
+/** 拖拽 payload：预设模型 */
+interface DragPayloadPreset {
+  kind: 'preset'
+  id: string
+  label: string
+  typeId: string
+  source?: string
+  name?: string
+}
+const DRAG_TYPE = 'application/panelx-3d-model'
+
+/** 注册的模型类型列表 */
 const modelTypeList = computed(() => modelRegistry.getTypes())
 
 /** 3D 编辑器当前配置：符合 DashboardConfig，widgets3D 符合 WidgetConfig3D 格式 */
@@ -37,6 +135,237 @@ const config = reactive<DashboardConfig>({
   design: { width: 1920, height: 1080 },
   widgets2D: [],
   widgets3D: []
+})
+
+const widgets3D = computed(() => config.widgets3D ?? [])
+
+/** 3D world/loader/storyboard（由 setup3D 初始化） */
+const loaderRef = ref<Loader | null>(null)
+const worldRef = ref<World | null>(null)
+const storyboardRef = ref<StoryBoard | null>(null)
+const addedModelNames = new Set<string>()
+const pendingTransforms = new Map<string, { position: [number, number, number]; scale: number }>()
+/** widget id -> 已加入场景的 Object3D（用于删除时从 scene 移除） */
+const addedModelNodes = new Map<string, Object3D>()
+
+/** 主区域是否处于拖拽悬停 */
+const isDragOver = ref(false)
+
+/** 模型类型拖入：拖起时写入 payload */
+function onDragStartType(e: DragEvent, item: ModelTypeDefinition) {
+  if (!e.dataTransfer) return
+  e.dataTransfer.effectAllowed = 'copy'
+  e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ kind: 'type', id: item.id, label: item.label }))
+}
+
+/** 预设模型拖入：拖起时写入 payload */
+function onDragStartPreset(
+  e: DragEvent,
+  p: { id: string; label: string; typeId: string; source?: string; name?: string }
+) {
+  if (!e.dataTransfer) return
+  e.dataTransfer.effectAllowed = 'copy'
+  e.dataTransfer.setData(
+    DRAG_TYPE,
+    JSON.stringify({
+      kind: 'preset',
+      id: p.id,
+      label: p.label,
+      typeId: p.typeId,
+      source: p.source,
+      name: p.name
+    })
+  )
+}
+
+/** 放下后待确认的数据 */
+const pendingDrop = ref<DragPayloadType | DragPayloadPreset | null>(null)
+const dropDialogVisible = ref(false)
+const dropForm = reactive({ posX: 0, posY: 0, posZ: 0, scale: 1 })
+
+/** 主区域放下：确认后弹出对话框 */
+function onDrop(e: DragEvent) {
+  isDragOver.value = false
+  const raw = e.dataTransfer?.getData(DRAG_TYPE)
+  if (!raw) return
+  try {
+    const payload = JSON.parse(raw) as DragPayloadType | DragPayloadPreset
+    if (payload.kind !== 'type' && payload.kind !== 'preset') return
+    pendingDrop.value = payload
+    dropForm.posX = 0
+    dropForm.posY = 0
+    dropForm.posZ = 0
+    dropForm.scale = 1
+    dropDialogVisible.value = true
+  } catch {
+    // ignore
+  }
+}
+
+function closeDropDialog() {
+  dropDialogVisible.value = false
+  pendingDrop.value = null
+}
+
+function confirmDropDialog() {
+  const payload = pendingDrop.value
+  if (!payload) {
+    closeDropDialog()
+    return
+  }
+  const id = `model-${payload.id}-${Date.now()}`
+  const position: [number, number, number] = [
+    Number(dropForm.posX) || 0,
+    Number(dropForm.posY) || 0,
+    Number(dropForm.posZ) || 0
+  ]
+  const scale = Number(dropForm.scale)
+  const scaleVal = Number.isFinite(scale) && scale > 0 ? scale : 1
+  const w: WidgetConfig3D = {
+    id,
+    type: 'model3d',
+    visible: true,
+    props: {
+      position,
+      scale: scaleVal
+    }
+  }
+  if (payload.kind === 'preset') {
+    w.props!.source = payload.source
+    w.props!.typeId = payload.typeId
+    w.props!.name = payload.name ?? payload.id
+  } else {
+    w.props!.typeId = payload.id
+  }
+  if (!config.widgets3D) config.widgets3D = []
+  config.widgets3D.push(w)
+  // 同步到 3D 场景：注册并加载
+  addWidgetModelToScene(w)
+  closeDropDialog()
+}
+
+/** 解析为绝对 URL，避免请求落到 SPA 路由返回 index.html（导致 GLTFLoader 报 "Unexpected token '<'"） */
+function resolveModelUrl(source: string | undefined): string | undefined {
+  if (source == null || source === '') return undefined
+  if (source.startsWith('http://') || source.startsWith('https://')) return source
+  const base = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/'
+  const path = source.startsWith('/') ? source.slice(1) : source
+  const fullPath = base.endsWith('/') ? base + path : base + '/' + path
+  try {
+    return new URL(fullPath, window.location.origin).href
+  } catch {
+    return undefined
+  }
+}
+
+function addWidgetModelToScene(w: WidgetConfig3D): void {
+  const loader = loaderRef.value
+  const sb = storyboardRef.value
+  if (!loader || !sb) return
+
+  const props = (w.props ?? {}) as Record<string, unknown>
+  const typeId = String(props.typeId ?? '')
+  if (!typeId) return
+
+  const rawSource = props.source != null ? String(props.source) : undefined
+  const source = resolveModelUrl(rawSource)
+  if ((typeId === 'gltf' || typeId === 'fbx') && !source) return
+  const modelName = w.id
+  const model = modelRegistry.createModel(typeId, { name: modelName, source })
+  if (!model) return
+
+  const pos = (props.position as [number, number, number] | undefined) ?? [0, 0, 0]
+  const scale = typeof props.scale === 'number' ? (props.scale as number) : Number(props.scale)
+  const scaleVal = Number.isFinite(scale) && scale > 0 ? scale : 1
+  pendingTransforms.set(modelName, { position: [pos[0] ?? 0, pos[1] ?? 0, pos[2] ?? 0], scale: scaleVal })
+
+  loader.getStore().addModel(modelName, model as unknown as Model)
+  // 触发加载；加载完成后由 onFrameworkLoaded 将其加入 scene
+  loader.load(model as unknown as Model)
+}
+
+function onFrameworkLoaded(loader: Loader, world: World): void {
+  loaderRef.value = loader
+  worldRef.value = world
+
+  if (!storyboardRef.value) {
+    const orthoSize = 8
+    const aspect = 1
+    const cam = new OrthographicCamera(
+      -orthoSize * aspect,
+      orthoSize * aspect,
+      orthoSize,
+      -orthoSize,
+      0.1,
+      1000
+    )
+    cam.position.set(6, 6, 6)
+    cam.layers.enableAll()
+    const sb = new ControlsStoryBoard('Editor3D', cam, {
+      background: null,
+      orthographicSize: orthoSize
+    })
+    sb.enableControls(world.getRendererDom())
+    if (sb.controls) {
+      sb.controls.target.set(0, 0, 0)
+      sb.controls.enableDamping = true
+      sb.controls.dampingFactor = 0.05
+    }
+    storyboardRef.value = sb
+    world.sceneTo(sb)
+    nextTick(() => world.notifyResize())
+  }
+
+  // 将已加载的模型加入 storyBoard（避免重复加入）
+  const sb = storyboardRef.value
+  if (!sb) return
+  for (const [name] of loader.getStore().getModels().entries()) {
+    if (addedModelNames.has(name)) continue
+    const inst = loader.getStore().getModel(name)
+    if (!inst || !inst.scene) continue
+    const tf = pendingTransforms.get(name)
+    if (tf) {
+      inst.scene.position.set(tf.position[0], tf.position[1], tf.position[2])
+      inst.scene.scale.setScalar(tf.scale)
+    }
+    ;(sb as BaseStoryBoard).addModel(inst as unknown as Model)
+    addedModelNames.add(name)
+    addedModelNodes.set(name, inst.scene!)
+  }
+}
+
+/** 从主区域删除模型实例：从配置与场景中移除 */
+function deleteWidget(w: WidgetConfig3D): void {
+  const id = w.id
+  const arr = config.widgets3D
+  if (arr) {
+    const idx = arr.findIndex((item) => item.id === id)
+    if (idx !== -1) arr.splice(idx, 1)
+  }
+  addedModelNames.delete(id)
+  pendingTransforms.delete(id)
+  const obj = addedModelNodes.get(id)
+  if (obj && storyboardRef.value) {
+    storyboardRef.value.scene.remove(obj)
+    addedModelNodes.delete(id)
+  }
+}
+
+onMounted(async () => {
+  await nextTick()
+  // 初始化 3D world：主区域容器内创建 renderer/canvas，并在资源加载完成后回调 onFrameworkLoaded
+  setup3D('#panelx-editor3d-world', onFrameworkLoaded, () => [])
+})
+
+onUnmounted(() => {
+  try {
+    worldRef.value?.destroy()
+  } catch {
+    // ignore
+  }
+  loaderRef.value = null
+  worldRef.value = null
+  storyboardRef.value = null
 })
 
 function exportConfig() {
@@ -109,6 +438,12 @@ function exportConfig() {
   font-size: 0.6875rem;
   color: #94a3b8;
 }
+.panelx-editor3d-section {
+  margin-top: 1rem;
+}
+.panelx-editor3d-preset {
+  border-left: 2px solid #38bdf8;
+}
 .panelx-editor3d-ops {
   margin-top: 1.5rem;
 }
@@ -135,16 +470,163 @@ function exportConfig() {
   align-items: center;
   justify-content: center;
   background: #0f172a;
+  transition: outline 0.15s ease;
+}
+.panelx-editor3d-main-drag-over {
+  outline: 2px dashed #38bdf8;
+  outline-offset: -4px;
 }
 .panelx-editor3d-canvas {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+.panelx-editor3d-world-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+.panelx-editor3d-world {
+  position: absolute;
+  inset: 0;
+}
+.panelx-editor3d-world-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px dashed rgba(56, 189, 248, 0.6);
+  color: #94a3b8;
+  font-size: 0.875rem;
+  text-align: center;
+  pointer-events: none;
 }
 .panelx-editor3d-placeholder {
   color: #64748b;
   font-size: 0.875rem;
+  text-align: center;
+}
+.panelx-editor3d-widget-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0 0;
+  width: 100%;
+}
+.panelx-editor3d-widget-tag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.25rem;
+  border-radius: 0.375rem;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 0.8125rem;
+}
+.panelx-editor3d-widget-tag-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panelx-editor3d-widget-delete {
+  flex-shrink: 0;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #475569;
+  border-radius: 0.25rem;
+  background: #334155;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.panelx-editor3d-widget-delete:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+/* 放下后弹出的对话框 */
+.panelx-editor3d-dialog-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.panelx-editor3d-dialog {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  min-width: 18rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.panelx-editor3d-dialog-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+.panelx-editor3d-dialog-sub {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+.panelx-editor3d-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.panelx-editor3d-dialog-form label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+.panelx-editor3d-dialog-form input {
+  width: 6rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #475569;
+  border-radius: 0.25rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 0.875rem;
+}
+.panelx-editor3d-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.panelx-editor3d-dialog-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #475569;
+  border-radius: 0.375rem;
+  background: #334155;
+  color: #e2e8f0;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.panelx-editor3d-dialog-btn.primary {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+.panelx-editor3d-dialog-btn:hover {
+  opacity: 0.9;
 }
 </style>
