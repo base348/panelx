@@ -1,0 +1,7 @@
+/**
+ * 演示入口：各演示功能单独文件，逻辑随业务代码
+ */
+export { default as EditorExample } from './EditorExample.vue'
+export { default as Editor3DExample } from './Editor3DExample.vue'
+export { default as WorkshopExample } from './WorkshopExample.vue'
+export { default as ConfigurableExample } from './ConfigurableExample.vue'
