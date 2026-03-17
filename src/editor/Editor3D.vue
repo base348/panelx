@@ -309,6 +309,95 @@
             </div>
           </div>
         </div>
+
+        <div class="panelx-editor3d-props-editor">
+          <button
+            type="button"
+            class="panelx-editor3d-group-header panelx-editor3d-section"
+            @click="rightGroups.propsOpen = !rightGroups.propsOpen"
+          >
+            <span>属性 (Props)</span>
+            <span class="panelx-editor3d-group-toggle">{{ rightGroups.propsOpen ? '−' : '+' }}</span>
+          </button>
+          <template v-if="rightGroups.propsOpen">
+            <div v-if="selectedWidgetSupportedProps.length" class="panelx-editor3d-props-list">
+              <div
+                v-for="prop in selectedWidgetSupportedProps"
+                :key="prop.key"
+                class="panelx-editor3d-props-row"
+              >
+                <span class="panelx-editor3d-props-key">{{ prop.label ?? prop.key }}</span>
+                <select
+                  v-if="prop.enum?.length"
+                  :value="String(selectedWidgetCustomProps[prop.key] ?? '')"
+                  class="panelx-editor3d-props-value panelx-editor3d-props-select"
+                  @change="setCustomPropValue(prop.key, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">—</option>
+                  <option
+                    v-for="opt in prop.enum"
+                    :key="String(opt)"
+                    :value="String(opt)"
+                  >
+                    {{ opt }}
+                  </option>
+                </select>
+                <input
+                  v-else
+                  :value="selectedWidgetCustomProps[prop.key] ?? ''"
+                  type="text"
+                  class="panelx-editor3d-props-value"
+                  :placeholder="prop.key"
+                  @input="setCustomPropValue(prop.key, ($event.target as HTMLInputElement).value)"
+                />
+              </div>
+            </div>
+            <template v-if="customOnlyPropEntries.length">
+              <div class="panelx-editor3d-props-other-label">其他属性</div>
+              <div class="panelx-editor3d-props-list">
+                <div
+                  v-for="[key, val] in customOnlyPropEntries"
+                  :key="key"
+                  class="panelx-editor3d-props-row"
+                >
+                  <span class="panelx-editor3d-props-key">{{ key }}</span>
+                  <input
+                    :value="val"
+                    type="text"
+                    class="panelx-editor3d-props-value"
+                    @input="setCustomPropValue(key, ($event.target as HTMLInputElement).value)"
+                  />
+                  <button
+                    type="button"
+                    class="panelx-editor3d-props-remove"
+                    title="删除"
+                    @click="removeCustomProp(key)"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            </template>
+            <div class="panelx-editor3d-props-add">
+              <input
+                v-model="newPropKey"
+                type="text"
+                class="panelx-editor3d-props-key-in"
+                placeholder="键名"
+              />
+              <input
+                v-model="newPropValue"
+                type="text"
+                class="panelx-editor3d-props-value-in"
+                placeholder="值"
+                @keydown.enter="addCustomProp"
+              />
+              <button type="button" class="panelx-editor3d-btn panelx-editor3d-props-add-btn" @click="addCustomProp">
+                添加
+              </button>
+            </div>
+          </template>
+        </div>
       </template>
     </aside>
 
@@ -340,7 +429,7 @@
 import { reactive, computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { modelRegistry, setup3D } from '../framework'
 import type { DashboardConfig, WidgetConfig3D } from '../types/dashboard'
-import type { ModelTypeDefinition } from '../framework'
+import type { ModelTypeDefinition, PropDefinition } from '../framework'
 import type { Loader } from '../framework'
 import type { World } from '../framework'
 import { Object3D, OrthographicCamera } from 'three'
@@ -475,8 +564,45 @@ const leftGroups = reactive({
 })
 
 const rightGroups = reactive({
-  transformOpen: true
+  transformOpen: true,
+  propsOpen: true
 })
+
+/** 选中模型的「自定义属性」存储在 w.props.custom，此处 key 与配置约定一致 */
+const CUSTOM_PROPS_KEY = 'custom'
+
+/** 当前选中 widget 的 custom 对象（用于右侧栏 Props 配置），保证存在且可写 */
+const selectedWidgetCustomProps = computed(() => {
+  const id = selectedWidgetId.value
+  if (!id) return {}
+  const w = config.widgets3D?.find((item) => item.id === id)
+  if (!w) return {}
+  if (!w.props) w.props = {}
+  if (typeof (w.props as Record<string, unknown>)[CUSTOM_PROPS_KEY] !== 'object' || (w.props as Record<string, unknown>)[CUSTOM_PROPS_KEY] === null) {
+    (w.props as Record<string, unknown>)[CUSTOM_PROPS_KEY] = {}
+  }
+  return (w.props as Record<string, unknown>)[CUSTOM_PROPS_KEY] as Record<string, string | number>
+})
+
+/** 当前选中模型类型支持的 prop 列表（注册时配置），有 enum 的用下拉，无则自由输入 */
+const selectedWidgetSupportedProps = computed((): PropDefinition[] => {
+  const id = selectedWidgetId.value
+  if (!id) return []
+  const w = config.widgets3D?.find((item) => item.id === id)
+  const typeId = (w?.props as Record<string, unknown> | undefined)?.typeId as string | undefined
+  if (!typeId) return []
+  const def = modelRegistry.getType(typeId)
+  return def?.supportedProps ?? []
+})
+
+/** 仅「非支持列表」中的 custom 键值，用于「其他属性」展示与编辑 */
+const customOnlyPropEntries = computed(() => {
+  const supportedKeys = new Set(selectedWidgetSupportedProps.value.map((p) => p.key))
+  return Object.entries(selectedWidgetCustomProps.value).filter(([k]) => !supportedKeys.has(k))
+})
+
+const newPropKey = ref('')
+const newPropValue = ref('')
 
 function degToRad(deg: number): number {
   return (deg * Math.PI) / 180
@@ -750,7 +876,7 @@ function deleteWidget(w: WidgetConfig3D): void {
   pendingTransforms.delete(id)
   const obj = addedModelNodes.get(id)
   if (obj && storyboardRef.value) {
-    storyboardRef.value.scene.remove(obj)
+    ;(storyboardRef.value as BaseStoryBoard).removeModelByScene(obj)
     addedModelNodes.delete(id)
   }
   if (selectedWidgetId.value === id) {
@@ -865,6 +991,42 @@ function formatWidgetScale(scale: unknown): string {
     return String(scale)
   }
   return '-'
+}
+
+/** 将当前选中模型的 prop 变更通知到 Model 实例（必须用 storyboard 里已加入的实例，不能用 store.getModel 的 clone） */
+function notifyModelPropUpdate(key: string, value: unknown): void {
+  const id = selectedWidgetId.value
+  if (!id) return
+  const sb = storyboardRef.value as BaseStoryBoard | null
+  const model = sb?.getModelByName(id)
+  if (model) model.propUpdate(key, value)
+}
+
+function addCustomProp(): void {
+  const key = String(newPropKey.value ?? '').trim()
+  if (!key) return
+  const obj = selectedWidgetCustomProps.value
+  const val = newPropValue.value
+  const num = Number(val)
+  const value = Number.isFinite(num) ? num : String(val ?? '')
+  obj[key] = value
+  newPropKey.value = ''
+  newPropValue.value = ''
+  notifyModelPropUpdate(key, value)
+}
+
+function setCustomPropValue(key: string, value: string): void {
+  const obj = selectedWidgetCustomProps.value
+  const num = Number(value)
+  const parsed = Number.isFinite(num) ? num : value
+  obj[key] = parsed
+  notifyModelPropUpdate(key, parsed)
+}
+
+function removeCustomProp(key: string): void {
+  const obj = selectedWidgetCustomProps.value
+  delete obj[key]
+  notifyModelPropUpdate(key, undefined)
 }
 
 onMounted(async () => {
@@ -1194,6 +1356,90 @@ function exportConfig() {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.panelx-editor3d-props-editor {
+  margin-top: 0.5rem;
+}
+.panelx-editor3d-props-other-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin: 0.5rem 0 0.25rem;
+}
+.panelx-editor3d-props-select {
+  cursor: pointer;
+  appearance: auto;
+}
+.panelx-editor3d-props-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.panelx-editor3d-props-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.panelx-editor3d-props-key {
+  flex-shrink: 0;
+  min-width: 4rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.panelx-editor3d-props-value {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.35rem;
+  border-radius: 0.25rem;
+  border: 1px solid #475569;
+  background: #020617;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+}
+.panelx-editor3d-props-remove {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.2rem;
+  background: #475569;
+  color: #e2e8f0;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.panelx-editor3d-props-remove:hover {
+  background: #ef4444;
+}
+.panelx-editor3d-props-add {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.panelx-editor3d-props-key-in,
+.panelx-editor3d-props-value-in {
+  width: 4rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 0.25rem;
+  border: 1px solid #475569;
+  background: #020617;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+}
+.panelx-editor3d-props-value-in {
+  flex: 1;
+  min-width: 3rem;
+}
+.panelx-editor3d-props-add-btn {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
 }
 
 /* 放下后弹出的对话框 */

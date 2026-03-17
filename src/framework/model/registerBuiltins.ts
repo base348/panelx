@@ -252,6 +252,7 @@ function registerBuiltins(): void {
     id: 'ez-tree',
     label: 'Tree (EZ-Tree)',
     category: 'builtin',
+    supportedProps: EzTreeModel.supportedProps,
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'EzTree'
       return new EzTreeModel(name)

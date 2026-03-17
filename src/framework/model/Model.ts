@@ -1,5 +1,6 @@
 import {AnimationAction, AnimationClip, AnimationMixer, Object3D, Scene} from "three";
 import {ModelInstanceStore} from "../ModelInstanceStore.ts";
+import type { PropDefinition } from "./ModelRegistry";
 
 export class Model extends Object3D{
     modelName: string
@@ -11,6 +12,10 @@ export class Model extends Object3D{
     actions!: Map<string, AnimationAction>
     actionMixer!: AnimationMixer
     layer: number[] = []
+    /** 模型自定义属性，由编辑器或配置传入，暂不在 Model 内部逻辑中使用 */
+    props?: Record<string, unknown>
+    /** 子类可覆盖：该模型支持的 prop 列表，用于编辑器展示与枚举/自由输入 */
+    static supportedProps?: PropDefinition[]
     constructor(name: string) {
         super()
         this.modelName = name
@@ -55,6 +60,14 @@ export class Model extends Object3D{
 
     update(_delta: number) {
         // 什么也不做
+    }
+
+    /**
+     * 编辑器或外部更新某个 prop 时调用，子类可覆盖以响应（如切 preset、改颜色）。
+     * 基类仅打 log，不修改内部状态。
+     */
+    propUpdate(key: string, value: unknown): void {
+        console.log(`[Model] propUpdate ${this.modelName} key=${key} value=`, value)
     }
 
 }

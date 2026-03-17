@@ -32,6 +32,8 @@ export abstract class BaseStoryBoard implements StoryBoard {
     windowSize: Vector2 = new Vector2()
     private readonly _camera: Camera
     children: Object3D[] = []
+    /** 已通过 addModel 加入场景的模型，用于每帧调用 model.update(delta) */
+    private models: Model[] = []
     private _fullScreen: boolean
     size?: Vector2
     _position?: Vector2
@@ -177,6 +179,34 @@ export abstract class BaseStoryBoard implements StoryBoard {
            if (m.isCss3d) this.css3dManager.register(m.scene)
            this.add(m.scene)
        }
+       this.models.push(m)
+    }
+
+    /** 从场景和模型列表中移除模型（如删除 widget 时调用） */
+    removeModel(m: Model) {
+       if (m.scene) {
+           this._scene.remove(m.scene)
+           const idx = this.children.indexOf(m.scene as Object3D)
+           if (idx >= 0) this.children.splice(idx, 1)
+       }
+       this.models = this.models.filter((x) => x !== m)
+    }
+
+    /** 按 modelName 获取已加入场景的模型实例（用于 prop 更新等，不要用 store.getModel 的 clone） */
+    getModelByName(name: string): Model | undefined {
+       return this.models.find((m) => m.modelName === name)
+    }
+
+    /** 根据已加入场景的 Object3D（即 model.scene）查找并移除对应模型；未找到时仍从场景中移除该对象，保证删除生效 */
+    removeModelByScene(sceneObj: Object3D) {
+       const m = this.models.find((x) => x.scene === sceneObj)
+       if (m) {
+          this.removeModel(m)
+          return
+       }
+       this._scene.remove(sceneObj)
+       const idx = this.children.indexOf(sceneObj)
+       if (idx >= 0) this.children.splice(idx, 1)
     }
 
     /**
@@ -193,8 +223,8 @@ export abstract class BaseStoryBoard implements StoryBoard {
     }
 
     update(delta: number) {
-        if (this.innerStoryboards.length == 0) {
-            return
+        for (let i = 0; i < this.models.length; i++) {
+            this.models[i].update(delta)
         }
         for (let i = 0; i < this.innerStoryboards.length; i++) {
             let item = this.innerStoryboards[i]

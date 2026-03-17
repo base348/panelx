@@ -1,6 +1,18 @@
 import type { Model } from './Model'
 
 /**
+ * 模型支持的单个属性定义：可在编辑器中展示并限制为枚举或自由输入。
+ */
+export interface PropDefinition {
+  /** 属性键名，与 props[key] 对应 */
+  key: string
+  /** 展示用标签，不填则用 key */
+  label?: string
+  /** 可选预置枚举，有则编辑器用下拉选择；无则自由输入 */
+  enum?: (string | number)[]
+}
+
+/**
  * 模型类型定义：描述一种可注册的 3D 模型类型，均继承自 Model。
  * 外部可注册自定义类型，并通过 getTypes() 获取「可用模型列表」。
  */
@@ -16,6 +28,8 @@ export interface ModelTypeDefinition {
    * 配置通常包含 name；可加载类型需 source 与 category（或 format 映射为 category）。
    */
   create: (config: ModelRegistryCreateConfig) => Model
+  /** 该类型支持的 prop 列表，注册时从 Model 类或配置读取；有 enum 的用下拉，无则自由输入 */
+  supportedProps?: PropDefinition[]
 }
 
 /** 创建模型时的通用配置：name 必填，其余由具体类型使用 */
