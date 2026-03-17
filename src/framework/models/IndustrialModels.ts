@@ -16,9 +16,8 @@ import {
 import type { PropDefinition } from '../model/ModelRegistry'
 import { Model } from '../model/Model'
 
-const DEFAULT_FLOOR_WIDTH = 20
-const DEFAULT_FLOOR_DEPTH = 10
-const LANE_STRIP_HEIGHT = 0.08
+const DEFAULT_FLOOR_WIDTH = 1
+const DEFAULT_FLOOR_DEPTH = 1
 
 const DEVICE_STATUS = ['normal', 'fault'] as const
 type DeviceStatus = (typeof DEVICE_STATUS)[number]
@@ -31,7 +30,7 @@ function parseDeviceStatus(v: unknown): DeviceStatus | null {
   return null
 }
 
-/** 工业环境通用路面（自发光、不依赖灯光），深灰底 + 车道线；支持 prop 修改尺寸 */
+/** 工业环境通用路面（自发光、不依赖灯光），深灰底；支持 prop 修改尺寸 */
 export class IndustrialFloor extends Model {
   static supportedProps: PropDefinition[] = [
     { key: 'width', label: '宽度' },
@@ -41,7 +40,6 @@ export class IndustrialFloor extends Model {
   private _width = DEFAULT_FLOOR_WIDTH
   private _depth = DEFAULT_FLOOR_DEPTH
   private readonly floorMesh: Mesh
-  private readonly laneMesh: Mesh
 
   constructor(name = 'IndustrialFloor') {
     super(name)
@@ -53,22 +51,12 @@ export class IndustrialFloor extends Model {
     scene.add(floor)
     this.floorMesh = floor
 
-    const laneGeom = new PlaneGeometry(this._width, LANE_STRIP_HEIGHT)
-    const laneMat = new MeshBasicMaterial({ color: 0xfff59d, side: DoubleSide })
-    const lane = new Mesh(laneGeom, laneMat)
-    lane.position.set(0, 0.01, 0)
-    lane.rotation.x = -Math.PI / 2
-    scene.add(lane)
-    this.laneMesh = lane
-
     this.setScene(scene)
   }
 
   private refreshFloorGeometry(): void {
     this.floorMesh.geometry.dispose()
     this.floorMesh.geometry = new PlaneGeometry(this._width, this._depth)
-    this.laneMesh.geometry.dispose()
-    this.laneMesh.geometry = new PlaneGeometry(this._width, LANE_STRIP_HEIGHT)
   }
 
   override propUpdate(key: string, value: unknown): void {

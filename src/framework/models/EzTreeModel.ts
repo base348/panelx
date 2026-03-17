@@ -3,6 +3,32 @@ import { Tree } from '@dgreenheck/ez-tree'
 import { Model } from '../model/Model'
 import type { PropDefinition } from '../model/ModelRegistry'
 
+type DisposableGeometry = { dispose?: () => void }
+type DisposableMaterial = { dispose?: () => void; map?: DisposableGeometry; normalMap?: DisposableGeometry; roughnessMap?: DisposableGeometry; metalnessMap?: DisposableGeometry; emissiveMap?: DisposableGeometry; alphaMap?: DisposableGeometry }
+
+function disposeTreeObject(root: import('three').Object3D): void {
+  root.traverse((obj) => {
+    const anyObj = obj as unknown as { geometry?: DisposableGeometry; material?: DisposableMaterial | DisposableMaterial[] }
+    if (anyObj.geometry?.dispose) {
+      try { anyObj.geometry.dispose() } catch { /* ignore */ }
+    }
+    const mats = anyObj.material ? (Array.isArray(anyObj.material) ? anyObj.material : [anyObj.material]) : []
+    for (const m of mats) {
+      if (!m) continue
+      const texKeys: (keyof DisposableMaterial)[] = ['map','normalMap','roughnessMap','metalnessMap','emissiveMap','alphaMap']
+      for (const k of texKeys) {
+        const t = m[k]
+        if (t && typeof (t as DisposableGeometry).dispose === 'function') {
+          try { (t as DisposableGeometry).dispose?.() } catch { /* ignore */ }
+        }
+      }
+      if (m.dispose) {
+        try { m.dispose() } catch { /* ignore */ }
+      }
+    }
+  })
+}
+
 const EZ_TREE_PRESETS = [
   'Ash Small',
   'Ash Medium',
@@ -70,6 +96,8 @@ export class EzTreeModel extends Model {
             this.scene.remove(this.tree)
             this.scene.add(newTree)
           }
+          // 释放旧树的 GPU 资源（geometry/material/texture），避免频繁切换预设导致显存上涨
+          disposeTreeObject(this.tree)
           this.tree = newTree
         } catch (e) {
           console.warn('[EzTreeModel] createTreeWithPreset failed:', preset, e)

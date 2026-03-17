@@ -16,6 +16,36 @@ import type {StoryBoard} from "../StoryBoard.ts";
 import {CSS3DObjManager} from "./CSS3DObjManager.ts";
 import type {Model} from "../model/Model.ts";
 
+type DisposableGeometry = { dispose?: () => void }
+type DisposableMaterial = { dispose?: () => void; map?: DisposableGeometry; normalMap?: DisposableGeometry; roughnessMap?: DisposableGeometry; metalnessMap?: DisposableGeometry; emissiveMap?: DisposableGeometry; alphaMap?: DisposableGeometry }
+
+function disposeObject3D(root: Object3D): void {
+    root.traverse((obj: Object3D) => {
+        const anyObj = obj as unknown as {
+            geometry?: DisposableGeometry
+            material?: DisposableMaterial | DisposableMaterial[]
+        }
+        if (anyObj.geometry?.dispose) {
+            try { anyObj.geometry.dispose() } catch { /* ignore */ }
+        }
+        const mats = anyObj.material ? (Array.isArray(anyObj.material) ? anyObj.material : [anyObj.material]) : []
+        for (const m of mats) {
+            if (!m) continue
+            // dispose common texture slots if present
+            const texKeys: (keyof DisposableMaterial)[] = ['map','normalMap','roughnessMap','metalnessMap','emissiveMap','alphaMap']
+            for (const k of texKeys) {
+                const t = m[k]
+                if (t && typeof (t as DisposableGeometry).dispose === 'function') {
+                    try { (t as DisposableGeometry).dispose?.() } catch { /* ignore */ }
+                }
+            }
+            if (m.dispose) {
+                try { m.dispose() } catch { /* ignore */ }
+            }
+        }
+    })
+}
+
 /** 可选场景配置：背景、灯光、相机（与 Scene3DConfig 对应字段一致） */
 export interface Scene3DSceneOptions {
     /** 背景：undefined/null/"transparent" 透明，string 为十六进制颜色如 "#0d1b2a" */
@@ -188,6 +218,8 @@ export abstract class BaseStoryBoard implements StoryBoard {
            this._scene.remove(m.scene)
            const idx = this.children.indexOf(m.scene as Object3D)
            if (idx >= 0) this.children.splice(idx, 1)
+           // 释放 GPU 资源，避免显存泄漏导致 context lost
+           disposeObject3D(m.scene)
        }
        this.models = this.models.filter((x) => x !== m)
     }
@@ -207,6 +239,7 @@ export abstract class BaseStoryBoard implements StoryBoard {
        this._scene.remove(sceneObj)
        const idx = this.children.indexOf(sceneObj)
        if (idx >= 0) this.children.splice(idx, 1)
+       disposeObject3D(sceneObj)
     }
 
     /**

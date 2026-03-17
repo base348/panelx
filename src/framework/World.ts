@@ -14,6 +14,7 @@ export class World {
     private cssRenderer!: CSS3DRenderer
     private stats: StatsWrapper = new StatsWrapper()
     private container!: Element
+    private contextLost: boolean = false
 
     private frequencyManager: FrequencyManager = new FrequencyManager(defaultUpdateFrequency)
 
@@ -105,8 +106,16 @@ export class World {
         this.renderer.debug.checkShaderErrors = true; // 启用着色器错误检查
         this.renderer.shadowMap.type = PCFSoftShadowMap; // 激活高级渲染特性
         this.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+            // 必须 preventDefault，否则浏览器可能不尝试恢复
+            e.preventDefault()
+            this.contextLost = true
             console.error("WebGL 上下文丢失！")
             console.log(e)
+        })
+        this.renderer.domElement.addEventListener('webglcontextrestored', () => {
+            console.warn("WebGL 上下文已恢复")
+            this.contextLost = false
+            // three 会在恢复后继续工作，但部分资源可能需要业务侧重新加载/重建
         })
     }
 
@@ -146,6 +155,9 @@ export class World {
     }
 
     private render() {
+        if (this.contextLost) {
+            return
+        }
         this.stats.update()
         let delta = this.frequencyManager.update()
         if (delta <= 0) {

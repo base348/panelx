@@ -23,8 +23,6 @@ export class Model extends Object3D{
     rotating: boolean = false
     /** 旋转任务目标（欧拉角，弧度） */
     private rotateTarget?: Vector3
-    /** 启动旋转任务时的初始剩余角度（用于 10% 收敛阈值） */
-    private rotateInitialRemaining?: Vector3
 
     /** 移动速度（单位/秒），由 update 驱动 */
     private moveSpeed: Vector3 = new Vector3(1, 1, 1)
@@ -32,8 +30,8 @@ export class Model extends Object3D{
     moving: boolean = false
     /** 移动任务目标位置 */
     private moveTarget?: Vector3
-    /** 启动移动任务时的初始剩余距离（用于 10% 收敛阈值） */
-    private moveInitialRemaining?: Vector3
+    /** snap 阈值：当某轴剩余小于该值时直接修正到目标（坐标单位/弧度单位） */
+    private static readonly SNAP_EPS = 0.1
 
     constructor(name: string) {
         super()
@@ -100,11 +98,7 @@ export class Model extends Object3D{
 
     /** 移动到：参数为最终位置向量。由 update 执行任务 */
     moveTo(target: Vector3): void {
-        const obj = this.scene ?? this
-        const current = obj.position.clone()
-        const remaining = new Vector3(target.x - current.x, target.y - current.y, target.z - current.z)
         this.moveTarget = target.clone()
-        this.moveInitialRemaining = new Vector3(Math.abs(remaining.x), Math.abs(remaining.y), Math.abs(remaining.z))
         this.moving = true
     }
 
@@ -131,15 +125,7 @@ export class Model extends Object3D{
 
     /** 旋转到：参数为最终向量（xyz 各自弧度）。由 update 执行任务 */
     rotateTo(target: Vector3): void {
-        const obj = this.scene ?? this
-        const current = new Vector3(obj.rotation.x, obj.rotation.y, obj.rotation.z)
-        const remaining = new Vector3(
-            target.x - current.x,
-            target.y - current.y,
-            target.z - current.z
-        )
         this.rotateTarget = target.clone()
-        this.rotateInitialRemaining = new Vector3(Math.abs(remaining.x), Math.abs(remaining.y), Math.abs(remaining.z))
         this.rotating = true
     }
 
@@ -154,8 +140,7 @@ export class Model extends Object3D{
                 this.moveTarget.y - currentPos.y,
                 this.moveTarget.z - currentPos.z
             )
-            const initPos = this.moveInitialRemaining ?? new Vector3(Math.abs(diffPos.x), Math.abs(diffPos.y), Math.abs(diffPos.z))
-            const snapThresholdPos = new Vector3(initPos.x * 0.1, initPos.y * 0.1, initPos.z * 0.1)
+            const snapThresholdPos = new Vector3(Model.SNAP_EPS, Model.SNAP_EPS, Model.SNAP_EPS)
             const stepPos = new Vector3(this.moveSpeed.x * delta, this.moveSpeed.y * delta, this.moveSpeed.z * delta)
             const nextPos = currentPos.clone()
 
@@ -174,7 +159,6 @@ export class Model extends Object3D{
             if (donePos) {
                 this.moving = false
                 this.moveTarget = undefined
-                this.moveInitialRemaining = undefined
             }
         }
 
@@ -189,8 +173,7 @@ export class Model extends Object3D{
             this.rotateTarget.z - current.z
         )
 
-        const init = this.rotateInitialRemaining ?? new Vector3(Math.abs(diff.x), Math.abs(diff.y), Math.abs(diff.z))
-        const snapThreshold = new Vector3(init.x * 0.1, init.y * 0.1, init.z * 0.1)
+        const snapThreshold = new Vector3(Model.SNAP_EPS, Model.SNAP_EPS, Model.SNAP_EPS)
 
         const step = new Vector3(this.rotateSpeed.x * delta, this.rotateSpeed.y * delta, this.rotateSpeed.z * delta)
 
@@ -226,7 +209,6 @@ export class Model extends Object3D{
         if (done) {
             this.rotating = false
             this.rotateTarget = undefined
-            this.rotateInitialRemaining = undefined
         }
     }
 

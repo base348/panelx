@@ -10,21 +10,41 @@
           <span class="panelx-editor3d-size-label">Dashboard</span>
           <span class="panelx-editor3d-size-value">{{ designSize.width }} × {{ designSize.height }}</span>
         </div>
+        <div class="panelx-editor3d-size-row">
+          <span class="panelx-editor3d-size-label">Viewport</span>
+          <span class="panelx-editor3d-size-value">{{ viewportSize.x }} × {{ viewportSize.y }} (DPR {{ dpr }})</span>
+        </div>
+        <div class="panelx-editor3d-size-row">
+          <span class="panelx-editor3d-size-label">Canvas</span>
+          <span class="panelx-editor3d-size-value">{{ canvasPixelSize.x }} × {{ canvasPixelSize.y }} px</span>
+        </div>
         <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
-          <span class="panelx-editor3d-size-label">WorldSize</span>
+          <span class="panelx-editor3d-size-label">3D设计</span>
           <div class="panelx-editor3d-size-inputs">
             <label>
               X
-              <input v-model.number="sceneWorldSize.x" type="number" step="any" />
+              <input v-model.number="designSize3D.width" type="number" step="any" min="0.0001" />
             </label>
             <label>
               Y
-              <input v-model.number="sceneWorldSize.y" type="number" step="any" />
+              <input v-model.number="designSize3D.height" type="number" step="any" min="0.0001" />
             </label>
             <label>
               Z
-              <input v-model.number="sceneWorldSize.z" type="number" step="any" />
+              <input v-model.number="worldSizeZ" type="number" step="any" />
             </label>
+          </div>
+        </div>
+        <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
+          <span class="panelx-editor3d-size-label">比例尺</span>
+          <div class="panelx-editor3d-size-inputs">
+            <label>
+              S
+              <input v-model.number="worldScale" type="number" step="any" min="0" />
+            </label>
+            <span class="panelx-editor3d-size-value">
+              World {{ sceneWorldSize.x.toFixed(3) }} × {{ sceneWorldSize.y.toFixed(3) }} × {{ sceneWorldSize.z.toFixed(3) }}
+            </span>
           </div>
         </div>
         <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
@@ -122,6 +142,16 @@
       <button type="button" class="panelx-editor3d-btn" @click="exportConfig">
         导出配置
       </button>
+      <button type="button" class="panelx-editor3d-btn" @click="triggerImportConfig">
+        导入配置
+      </button>
+      <input
+        ref="importInputRef"
+        type="file"
+        accept="application/json,.json"
+        class="panelx-editor3d-file-input"
+        @change="onImportConfigFile"
+      />
     </aside>
     <main
       class="panelx-editor3d-main"
@@ -544,11 +574,17 @@ function getDesignSizeFromStorage(): { width: number; height: number } | null {
 
 const initialDesign = getDesignSizeFromStorage() ?? { width: 1920, height: 1080 }
 const designSize = reactive({ width: initialDesign.width, height: initialDesign.height })
-const sceneWorldSize = reactive<{ x: number; y: number; z: number }>({
-  x: initialDesign.width,
-  y: initialDesign.height,
-  z: 1000
-})
+/** 3D 设计尺寸（用于按比例尺换算世界尺寸），默认沿用 Dashboard 尺寸 */
+const designSize3D = reactive({ width: initialDesign.width, height: initialDesign.height })
+/** 比例尺：world = design3D * scale。默认 0.01（将 1920 缩到 19.2，适配模型单位） */
+const worldScale = ref(0.01)
+/** world Z 尺寸：当前仅用于配置导出/展示（x/y 由设计尺寸与比例尺换算） */
+const worldSizeZ = ref(1000)
+const sceneWorldSize = computed<{ x: number; y: number; z: number }>(() => ({
+  x: (Number(designSize3D.width) || 0) * (Number(worldScale.value) || 0),
+  y: (Number(designSize3D.height) || 0) * (Number(worldScale.value) || 0),
+  z: Number(worldSizeZ.value) || 0
+}))
 const sceneLights = reactive<{ ambient: number; hemisphere: number; point: number }>({
   ambient: 1.8,
   hemisphere: 2.0,
@@ -567,6 +603,37 @@ const worldOuterStyle = computed(() => {
     maxHeight: '100%'
   }
 })
+
+const dpr = computed(() => Number(window.devicePixelRatio) || 1)
+const viewportSize = computed(() => worldRef.value?.getSize() ?? { x: 0, y: 0 })
+const canvasPixelSize = computed(() => ({
+  x: Math.max(0, Math.round(viewportSize.value.x * dpr.value)),
+  y: Math.max(0, Math.round(viewportSize.value.y * dpr.value))
+}))
+
+function applyOrthographicByWorldSize(): void {
+  const sb = storyboardRef.value as BaseStoryBoard | null
+  if (!sb) return
+  const cam = sb.camera as unknown as OrthographicCamera
+  // 兼容非正交相机：只在 orthographic camera 上应用
+  if (!(cam as unknown as { isOrthographicCamera?: boolean }).isOrthographicCamera) return
+
+  const size = viewportSize.value
+  const aspect = size.y > 0 ? size.x / size.y : 1
+  // 约定：WorldSize.y 表示可视高度（世界单位）
+  const worldH = Math.max(0.0001, sceneWorldSize.value.y)
+  const halfH = worldH / 2
+  cam.top = halfH
+  cam.bottom = -halfH
+  cam.left = -halfH * aspect
+  cam.right = halfH * aspect
+  cam.updateProjectionMatrix()
+}
+
+watch(
+  () => ({ x: sceneWorldSize.value.x, y: sceneWorldSize.value.y, z: sceneWorldSize.value.z }),
+  () => applyOrthographicByWorldSize()
+)
 
 /** 监听灯光配置变更，实时更新当前场景的灯光强度 */
 watch(
@@ -679,6 +746,86 @@ const rightGroups = reactive({
 
 /** 选中模型的「自定义属性」存储在 w.props.custom，此处 key 与配置约定一致 */
 const CUSTOM_PROPS_KEY = 'custom'
+
+const importInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerImportConfig(): void {
+  importInputRef.value?.click()
+}
+
+async function onImportConfigFile(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  // reset value so selecting the same file triggers change again
+  input.value = ''
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const payload = JSON.parse(text) as Partial<DashboardConfig>
+
+    // 1) 清空当前场景已有实例（会 dispose）
+    const existing = [...(config.widgets3D ?? [])] as WidgetConfig3D[]
+    for (const w of existing) deleteWidget(w)
+
+    // 2) 应用基础配置
+    if (payload.design?.width && payload.design?.height) {
+      designSize.width = Number(payload.design.width) || designSize.width
+      designSize.height = Number(payload.design.height) || designSize.height
+      config.design = { width: designSize.width, height: designSize.height }
+    }
+    if (typeof payload.background === 'string' && payload.background.trim() !== '') {
+      editorBackgroundColor.value = payload.background
+    }
+    if (payload.debug != null) config.debug = payload.debug
+
+    // 3) widgets3D
+    const importedWidgets = (payload.widgets3D ?? []) as WidgetConfig3D[]
+    config.widgets3D = importedWidgets.map((w) => ({
+      ...w,
+      props: w.props ? { ...(w.props as Record<string, unknown>) } : {}
+    }))
+
+    // 3.1) sceneWorldSize：优先使用导入的 worldSize（取第一个 widget），否则按跟随策略决定
+    const importedWorldSize = config.widgets3D?.[0]?.worldSize
+    if (importedWorldSize) {
+      // 以当前 3D 设计尺寸为基准推导比例尺：scale = world / design
+      const dw = Number(designSize3D.width) || 0
+      const dh = Number(designSize3D.height) || 0
+      const sx = dw > 0 ? importedWorldSize.x / dw : undefined
+      const sy = dh > 0 ? importedWorldSize.y / dh : undefined
+      const derived = Number.isFinite(sx as number) ? (sx as number) : Number.isFinite(sy as number) ? (sy as number) : undefined
+      if (derived != null) worldScale.value = derived
+      worldSizeZ.value = importedWorldSize.z
+    } else {
+      // 无 worldSize 时，默认 3D 设计尺寸沿用 Dashboard
+      designSize3D.width = designSize.width
+      designSize3D.height = designSize.height
+    }
+
+    // 4) 如果 props.sceneLights 存在，恢复灯光（取第一个 widget 的 sceneLights）
+    const firstLights = (config.widgets3D?.[0]?.props as Record<string, unknown> | undefined)?.sceneLights as
+      | { ambient?: unknown; hemisphere?: unknown; point?: unknown }
+      | undefined
+    if (firstLights) {
+      const a = Number(firstLights.ambient)
+      const h = Number(firstLights.hemisphere)
+      const p = Number(firstLights.point)
+      if (Number.isFinite(a)) sceneLights.ambient = a
+      if (Number.isFinite(h)) sceneLights.hemisphere = h
+      if (Number.isFinite(p)) sceneLights.point = p
+    }
+
+    // 5) 按配置重新加入场景
+    await nextTick()
+    applyOrthographicByWorldSize()
+    for (const w of config.widgets3D ?? []) {
+      addWidgetModelToScene(w)
+    }
+  } catch (err) {
+    console.error('[Editor3D] import config failed:', err)
+  }
+}
 
 /** 右侧命令框：旋转到（弧度）+ 速度（弧度/秒） */
 const rotateCmd = reactive({
@@ -965,14 +1112,15 @@ function onFrameworkLoaded(loader: Loader, world: World): void {
   worldRef.value = world
 
   if (!storyboardRef.value) {
-    const aspect = sceneWorldSize.y > 0 ? sceneWorldSize.x / sceneWorldSize.y : 1
-    const baseSize = Math.max(sceneWorldSize.x, sceneWorldSize.y)
-    const orthoSize = baseSize > 0 ? baseSize / 100 : 8
+    const aspect = designSize.height > 0 ? designSize.width / designSize.height : 1
+    // 先用当前 worldSize.y 推出正交相机可视高度，之后会由 applyOrthographicByWorldSize() 实时更新
+    const worldH = Math.max(0.0001, sceneWorldSize.value.y)
+    const halfH = worldH / 2
     const cam = new OrthographicCamera(
-      -orthoSize * aspect,
-      orthoSize * aspect,
-      orthoSize,
-      -orthoSize,
+      -halfH * aspect,
+      halfH * aspect,
+      halfH,
+      -halfH,
       0.1,
       1000
     )
@@ -980,7 +1128,7 @@ function onFrameworkLoaded(loader: Loader, world: World): void {
     cam.layers.enableAll()
     const sb = new ControlsStoryBoard('Editor3D', cam, {
       background: null,
-      orthographicSize: orthoSize,
+      orthographicSize: halfH,
       lights: {
         ambient: sceneLights.ambient,
         hemisphere: sceneLights.hemisphere,
@@ -1207,7 +1355,7 @@ function exportConfig() {
       ? (config.widgets3D as WidgetConfig3D[]).map((w) => ({
           id: w.id,
           type: w.type,
-          worldSize: w.worldSize ?? { x: sceneWorldSize.x, y: sceneWorldSize.y, z: sceneWorldSize.z },
+          worldSize: w.worldSize ?? { x: sceneWorldSize.value.x, y: sceneWorldSize.value.y, z: sceneWorldSize.value.z },
           visible: w.visible,
           props: {
             ...(w.props ? { ...w.props } : {}),
@@ -1243,13 +1391,14 @@ function exportConfig() {
 }
 .panelx-editor3d-sidebar {
   flex-shrink: 0;
-  width: 12rem;
-  padding: 1rem;
+  width: 14rem;
+  padding: 0.85rem 0.85rem;
   background: #1e293b;
   color: #e2e8f0;
   border-right: 1px solid #334155;
   display: flex;
   flex-direction: column;
+  gap: 0.25rem;
   max-height: 100%;
   overflow-y: auto;
 }
@@ -1259,8 +1408,8 @@ function exportConfig() {
 }
 .panelx-editor3d-group-header {
   width: 100%;
-  padding: 0.35rem 0.4rem;
-  margin: 0 0 0.4rem;
+  padding: 0.4rem 0.5rem;
+  margin: 0.15rem 0 0.35rem;
   border: none;
   border-radius: 0.35rem;
   background: #0f172a;
@@ -1284,8 +1433,8 @@ function exportConfig() {
   font-weight: 600;
 }
 .panelx-editor3d-size-display {
-  margin-bottom: 0.75rem;
-  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.6rem;
   border-radius: 0.375rem;
   background: #0f172a;
   font-size: 0.75rem;
@@ -1294,7 +1443,7 @@ function exportConfig() {
 .panelx-editor3d-size-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
 }
 .panelx-editor3d-size-row-inputs {
@@ -1309,6 +1458,8 @@ function exportConfig() {
 .panelx-editor3d-size-inputs {
   display: flex;
   gap: 0.25rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .panelx-editor3d-size-inputs label {
   display: flex;
@@ -1316,7 +1467,7 @@ function exportConfig() {
   gap: 0.15rem;
 }
 .panelx-editor3d-size-inputs input {
-  width: 3.2rem;
+  width: 3rem;
   padding: 0.2rem 0.3rem;
   border-radius: 0.25rem;
   border: 1px solid #475569;
@@ -1389,7 +1540,7 @@ function exportConfig() {
   color: #94a3b8;
 }
 .panelx-editor3d-section {
-  margin-top: 1rem;
+  margin-top: 0.85rem;
 }
 .panelx-editor3d-preset {
   border-left: 2px solid #38bdf8;
@@ -1411,6 +1562,9 @@ function exportConfig() {
 }
 .panelx-editor3d-btn:hover {
   background: #475569;
+}
+.panelx-editor3d-file-input {
+  display: none;
 }
 .panelx-editor3d-btn-inline {
   width: auto;
@@ -1584,6 +1738,10 @@ function exportConfig() {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.panelx-editor3d-pos-row .panelx-editor3d-size-inputs {
+  justify-content: flex-start;
 }
 
 .panelx-editor3d-props-editor {
