@@ -71,18 +71,20 @@
         <span>模型类型</span>
         <span class="panelx-editor3d-group-toggle">{{ leftGroups.typeOpen ? '−' : '+' }}</span>
       </button>
-      <div v-if="leftGroups.typeOpen">
-        <div
-          v-for="item in modelTypeList"
-          :key="'type-' + item.id"
-          class="panelx-editor3d-model-item"
-          draggable="true"
-          :title="`${item.label} (${item.id})`"
-          @dragstart="onDragStartType($event, item)"
-        >
-          <span class="panelx-editor3d-model-label">{{ item.label }}</span>
-          <span v-if="item.category" class="panelx-editor3d-model-category">{{ item.category }}</span>
-        </div>
+      <div v-if="leftGroups.typeOpen" class="panelx-editor3d-type-groups">
+        <template v-for="g in modelTypesByGroup" :key="'group-' + g.groupKey">
+          <div class="panelx-editor3d-group-subheader">{{ g.groupLabel }}</div>
+          <div
+            v-for="item in g.items"
+            :key="'type-' + item.id"
+            class="panelx-editor3d-model-item"
+            draggable="true"
+            :title="`${item.label} (${item.id})`"
+            @dragstart="onDragStartType($event, item)"
+          >
+            <span class="panelx-editor3d-model-label">{{ item.label }}</span>
+          </div>
+        </template>
       </div>
 
       <template v-if="presetModels?.length">
@@ -120,38 +122,6 @@
       <button type="button" class="panelx-editor3d-btn" @click="exportConfig">
         导出配置
       </button>
-
-      <template v-if="widgets3D.length">
-        <button
-          type="button"
-          class="panelx-editor3d-group-header panelx-editor3d-section"
-          @click="leftGroups.widgetsOpen = !leftGroups.widgetsOpen"
-        >
-          <span>已添加</span>
-          <span class="panelx-editor3d-group-toggle">{{ leftGroups.widgetsOpen ? '−' : '+' }}</span>
-        </button>
-        <ul v-if="leftGroups.widgetsOpen" class="panelx-editor3d-widget-list">
-          <li
-            v-for="w in widgets3D"
-            :key="w.id"
-            class="panelx-editor3d-widget-tag"
-            :class="{ active: selectedWidgetId === w.id }"
-          >
-            <span class="panelx-editor3d-widget-tag-text" @click="onSelectWidget(w)">
-              {{ w.id }} · {{ (w.props?.position as number[] | undefined)?.join(',') ?? '-' }} · 缩放
-              {{ formatWidgetScale(w.props?.scale) }}
-            </span>
-            <button
-              type="button"
-              class="panelx-editor3d-widget-delete"
-              title="从主区域删除"
-              @click="deleteWidget(w)"
-            >
-              删除
-            </button>
-          </li>
-        </ul>
-      </template>
     </aside>
     <main
       class="panelx-editor3d-main"
@@ -161,6 +131,43 @@
       @dragleave="isDragOver = false"
       @drop.prevent="onDrop"
     >
+      <!-- 主区域左上角：模型实例列表（浮动、可收缩） -->
+      <div
+        v-if="widgets3D.length"
+        class="panelx-editor3d-instance-float"
+        :class="{ collapsed: !floatingInstanceListOpen }"
+      >
+        <div
+          class="panelx-editor3d-instance-float-header"
+          @click="floatingInstanceListOpen = !floatingInstanceListOpen"
+        >
+          <span class="panelx-editor3d-instance-float-title">已添加 ({{ widgets3D.length }})</span>
+          <span class="panelx-editor3d-group-toggle">{{ floatingInstanceListOpen ? '−' : '+' }}</span>
+        </div>
+        <div v-show="floatingInstanceListOpen" class="panelx-editor3d-instance-float-body">
+          <ul class="panelx-editor3d-widget-list">
+            <li
+              v-for="w in widgets3D"
+              :key="w.id"
+              class="panelx-editor3d-widget-tag"
+              :class="{ active: selectedWidgetId === w.id }"
+            >
+              <span class="panelx-editor3d-widget-tag-text" @click="onSelectWidget(w)">
+                {{ w.id }} · {{ (w.props?.position as number[] | undefined)?.join(',') ?? '-' }} · 缩放
+                {{ formatWidgetScale(w.props?.scale) }}
+              </span>
+              <button
+                type="button"
+                class="panelx-editor3d-widget-delete"
+                title="从主区域删除"
+                @click.stop="deleteWidget(w)"
+              >
+                删除
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
       <div class="panelx-editor3d-canvas">
         <div class="panelx-editor3d-world-wrap" :style="worldOuterStyle">
           <div id="panelx-editor3d-world" class="panelx-editor3d-world" />
@@ -398,6 +405,49 @@
             </div>
           </template>
         </div>
+
+        <!-- 命令：创建旋转任务并执行一次 -->
+        <div class="panelx-editor3d-commands">
+          <button
+            type="button"
+            class="panelx-editor3d-group-header panelx-editor3d-section"
+            @click="rightGroups.commandsOpen = !rightGroups.commandsOpen"
+          >
+            <span>命令</span>
+            <span class="panelx-editor3d-group-toggle">{{ rightGroups.commandsOpen ? '−' : '+' }}</span>
+          </button>
+          <div v-if="rightGroups.commandsOpen" class="panelx-editor3d-commands-body">
+            <div class="panelx-editor3d-pos-row">
+              <span class="panelx-editor3d-size-label">旋转到 (度)</span>
+              <div class="panelx-editor3d-size-inputs">
+                <label>
+                  X
+                  <input v-model.number="rotateCmd.x" type="number" step="any" />
+                </label>
+                <label>
+                  Y
+                  <input v-model.number="rotateCmd.y" type="number" step="any" />
+                </label>
+                <label>
+                  Z
+                  <input v-model.number="rotateCmd.z" type="number" step="any" />
+                </label>
+              </div>
+            </div>
+            <div class="panelx-editor3d-pos-row">
+              <span class="panelx-editor3d-size-label">旋转速度 (弧度/秒)</span>
+              <div class="panelx-editor3d-size-inputs">
+                <label>
+                  S
+                  <input v-model.number="rotateCmd.speed" type="number" step="any" min="0" />
+                </label>
+                <button type="button" class="panelx-editor3d-btn panelx-editor3d-btn-inline" @click="runRotateToOnce">
+                  执行一次
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </template>
     </aside>
 
@@ -432,12 +482,13 @@ import type { DashboardConfig, WidgetConfig3D } from '../types/dashboard'
 import type { ModelTypeDefinition, PropDefinition } from '../framework'
 import type { Loader } from '../framework'
 import type { World } from '../framework'
-import { Object3D, OrthographicCamera } from 'three'
+import { Object3D, OrthographicCamera, Vector3 } from 'three'
 import { BaseStoryBoard } from '../framework/storyboard/BaseStoryBoard'
 import { ControlsStoryBoard } from '../framework/storyboard/ControlsStoryBoard'
 import type { StoryBoard } from '../framework'
 import type { Model } from '../framework'
 import { ModelLoadable } from '../framework/model/ModelLoadable'
+import { SimpleModel } from '../framework/model/SimpleModel'
 
 /** 预设模型列表（由 examples 等注入），在侧栏「可用模型」中展示 */
 defineProps<{
@@ -524,8 +575,33 @@ interface DragPayloadPreset {
 }
 const DRAG_TYPE = 'application/panelx-3d-model'
 
-/** 注册的模型类型列表 */
-const modelTypeList = computed(() => modelRegistry.getTypes())
+/** 模型类型分组：顺序与展示用标签（编辑器左侧按此分组展示） */
+const MODEL_GROUP_ORDER = ['decoration', 'equipment', 'infrastructure'] as const
+const MODEL_GROUP_LABELS: Record<string, string> = {
+  decoration: '装饰物',
+  equipment: '设备',
+  infrastructure: '基建'
+}
+const MODEL_GROUP_OTHER = '其他'
+
+/** 按分组整理后的模型类型列表，用于左侧「模型类型」分组展示 */
+const modelTypesByGroup = computed(() => {
+  const all = modelRegistry.getTypes()
+  const map = new Map<string, ModelTypeDefinition[]>()
+  for (const def of all) {
+    const key = (def.group && MODEL_GROUP_ORDER.includes(def.group as (typeof MODEL_GROUP_ORDER)[number])) ? def.group! : MODEL_GROUP_OTHER
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(def)
+  }
+  const result: { groupKey: string; groupLabel: string; items: ModelTypeDefinition[] }[] = []
+  for (const key of MODEL_GROUP_ORDER) {
+    const items = map.get(key)
+    if (items?.length) result.push({ groupKey: key, groupLabel: MODEL_GROUP_LABELS[key] ?? key, items })
+  }
+  const other = map.get(MODEL_GROUP_OTHER)
+  if (other?.length) result.push({ groupKey: MODEL_GROUP_OTHER, groupLabel: MODEL_GROUP_OTHER, items: other })
+  return result
+})
 
 /** 3D 编辑器当前配置：符合 DashboardConfig，widgets3D 符合 WidgetConfig3D 格式 */
 const config = reactive<DashboardConfig>({
@@ -559,17 +635,39 @@ const leftGroups = reactive({
   sceneOpen: true,
   typeOpen: true,
   presetOpen: true,
-  opsOpen: true,
-  widgetsOpen: true
+  opsOpen: true
 })
+
+/** 主区域左上角「已添加」实例列表是否展开（可收缩） */
+const floatingInstanceListOpen = ref(true)
 
 const rightGroups = reactive({
   transformOpen: true,
-  propsOpen: true
+  propsOpen: true,
+  commandsOpen: true
 })
 
 /** 选中模型的「自定义属性」存储在 w.props.custom，此处 key 与配置约定一致 */
 const CUSTOM_PROPS_KEY = 'custom'
+
+/** 右侧命令框：旋转到（弧度）+ 速度（弧度/秒） */
+const rotateCmd = reactive({
+  x: 0,
+  y: 0,
+  z: 0,
+  speed: Math.PI
+})
+
+function runRotateToOnce(): void {
+  const id = selectedWidgetId.value
+  if (!id) return
+  const sb = storyboardRef.value as BaseStoryBoard | null
+  const model = sb?.getModelByName(id)
+  if (!model) return
+  model.setRotateSpeed(Number.isFinite(rotateCmd.speed) ? rotateCmd.speed : Math.PI)
+  // Editor 输入为“角度”，Model 内部使用“弧度”
+  model.rotateTo(new Vector3(degToRad(rotateCmd.x || 0), degToRad(rotateCmd.y || 0), degToRad(rotateCmd.z || 0)))
+}
 
 /** 当前选中 widget 的 custom 对象（用于右侧栏 Props 配置），保证存在且可写 */
 const selectedWidgetCustomProps = computed(() => {
@@ -746,6 +844,14 @@ function resolveModelUrl(source: string | undefined): string | undefined {
   }
 }
 
+/** gltf/fbx/simple 不进入模型注册表，由此处直接创建；其余类型走注册表 */
+function createModelByTypeId(typeId: string, name: string, source?: string): Model | null {
+  if (typeId === 'gltf') return new ModelLoadable(name, 'gltf', source ?? '') as unknown as Model
+  if (typeId === 'fbx') return new ModelLoadable(name, 'fbx', source ?? '') as unknown as Model
+  if (typeId === 'simple') return new SimpleModel(name) as unknown as Model
+  return modelRegistry.createModel(typeId, { name, source })
+}
+
 function addWidgetModelToScene(w: WidgetConfig3D): void {
   const loader = loaderRef.value
   const sb = storyboardRef.value
@@ -759,7 +865,7 @@ function addWidgetModelToScene(w: WidgetConfig3D): void {
   const source = resolveModelUrl(rawSource)
   if ((typeId === 'gltf' || typeId === 'fbx') && !source) return
   const modelName = w.id
-  const model = modelRegistry.createModel(typeId, { name: modelName, source })
+  const model = createModelByTypeId(typeId, modelName, source)
   if (!model) return
 
   const pos = (props.position as [number, number, number] | undefined) ?? [0, 0, 0]
@@ -1212,6 +1318,22 @@ function exportConfig() {
 .panelx-editor3d-model-item:hover {
   background: #475569;
 }
+.panelx-editor3d-type-groups {
+  margin-top: 0.25rem;
+}
+.panelx-editor3d-group-subheader {
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.panelx-editor3d-group-subheader:first-child {
+  margin-top: 0;
+}
 .panelx-editor3d-model-label {
   font-weight: 500;
 }
@@ -1243,12 +1365,24 @@ function exportConfig() {
 .panelx-editor3d-btn:hover {
   background: #475569;
 }
+.panelx-editor3d-btn-inline {
+  width: auto;
+  margin-top: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+}
+.panelx-editor3d-commands-body {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px dashed rgba(148, 163, 184, 0.4);
+}
 .panelx-editor3d-right-empty {
   margin: 0.25rem 0 0;
   font-size: 0.75rem;
   color: #9ca3af;
 }
 .panelx-editor3d-main {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -1257,6 +1391,53 @@ function exportConfig() {
   justify-content: center;
   background: #0f172a;
   transition: outline 0.15s ease;
+}
+.panelx-editor3d-instance-float {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 20;
+  min-width: 11rem;
+  max-width: 20rem;
+  max-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.panelx-editor3d-instance-float.collapsed {
+  max-height: none;
+}
+.panelx-editor3d-instance-float-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  background: rgba(30, 41, 59, 0.8);
+  border-bottom: 1px solid #334155;
+  color: #e2e8f0;
+  font-size: 0.8125rem;
+  user-select: none;
+}
+.panelx-editor3d-instance-float.collapsed .panelx-editor3d-instance-float-header {
+  border-bottom: none;
+}
+.panelx-editor3d-instance-float-header:hover {
+  background: rgba(51, 65, 85, 0.9);
+}
+.panelx-editor3d-instance-float-title {
+  font-weight: 500;
+}
+.panelx-editor3d-instance-float-body {
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+.panelx-editor3d-instance-float-body .panelx-editor3d-widget-list {
+  padding: 0;
 }
 .panelx-editor3d-main-drag-over {
   outline: 2px dashed #38bdf8;

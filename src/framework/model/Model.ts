@@ -1,4 +1,4 @@
-import {AnimationAction, AnimationClip, AnimationMixer, Object3D, Scene} from "three";
+import {AnimationAction, AnimationClip, AnimationMixer, Object3D, Scene, Vector3} from "three";
 import {ModelInstanceStore} from "../ModelInstanceStore.ts";
 import type { PropDefinition } from "./ModelRegistry";
 
@@ -16,6 +16,16 @@ export class Model extends Object3D{
     props?: Record<string, unknown>
     /** 子类可覆盖：该模型支持的 prop 列表，用于编辑器展示与枚举/自由输入 */
     static supportedProps?: PropDefinition[]
+
+    /** 旋转速度（弧度/秒），由 update 驱动 */
+    private rotateSpeed: Vector3 = new Vector3(Math.PI, Math.PI, Math.PI)
+    /** 旋转任务是否进行中：调用 rotate/rotateTo 后打开，到达目标后关闭 */
+    rotating: boolean = false
+    /** 旋转任务目标（欧拉角，弧度） */
+    private rotateTarget?: Vector3
+    /** 启动旋转任务时的初始剩余角度（用于 10% 收敛阈值） */
+    private rotateInitialRemaining?: Vector3
+
     constructor(name: string) {
         super()
         this.modelName = name
@@ -58,8 +68,92 @@ export class Model extends Object3D{
         this.scene?.position.set(x,y,z)
     }
 
-    update(_delta: number) {
-        // 什么也不做
+    /**
+     * 设置旋转速度（弧度/秒）。
+     * - 传 number：三个轴同速
+     * - 传 Vector3：分别设置 x/y/z
+     */
+    setRotateSpeed(speed: number | Vector3): void {
+        if (typeof speed === 'number') {
+            const s = Math.max(0, speed)
+            this.rotateSpeed.set(s, s, s)
+            return
+        }
+        this.rotateSpeed.set(Math.max(0, speed.x), Math.max(0, speed.y), Math.max(0, speed.z))
+    }
+
+    /** 旋转：参数为增量向量（xyz 各自弧度）。等价于 rotateTo(current + delta) */
+    rotate(delta: Vector3): void {
+        const obj = this.scene ?? this
+        const target = new Vector3(obj.rotation.x + delta.x, obj.rotation.y + delta.y, obj.rotation.z + delta.z)
+        this.rotateTo(target)
+    }
+
+    /** 旋转到：参数为最终向量（xyz 各自弧度）。由 update 执行任务 */
+    rotateTo(target: Vector3): void {
+        const obj = this.scene ?? this
+        const current = new Vector3(obj.rotation.x, obj.rotation.y, obj.rotation.z)
+        const remaining = new Vector3(
+            target.x - current.x,
+            target.y - current.y,
+            target.z - current.z
+        )
+        this.rotateTarget = target.clone()
+        this.rotateInitialRemaining = new Vector3(Math.abs(remaining.x), Math.abs(remaining.y), Math.abs(remaining.z))
+        this.rotating = true
+    }
+
+    update(delta: number) {
+        if (!this.rotating || !this.rotateTarget) {
+            return
+        }
+        const obj = this.scene ?? this
+        const current = new Vector3(obj.rotation.x, obj.rotation.y, obj.rotation.z)
+        const diff = new Vector3(
+            this.rotateTarget.x - current.x,
+            this.rotateTarget.y - current.y,
+            this.rotateTarget.z - current.z
+        )
+
+        const init = this.rotateInitialRemaining ?? new Vector3(Math.abs(diff.x), Math.abs(diff.y), Math.abs(diff.z))
+        const snapThreshold = new Vector3(init.x * 0.1, init.y * 0.1, init.z * 0.1)
+
+        const step = new Vector3(this.rotateSpeed.x * delta, this.rotateSpeed.y * delta, this.rotateSpeed.z * delta)
+
+        const next = current.clone()
+        // x
+        if (Math.abs(diff.x) <= snapThreshold.x) {
+            next.x = this.rotateTarget.x
+        } else {
+            const m = Math.min(Math.abs(diff.x), step.x)
+            next.x += Math.sign(diff.x) * m
+        }
+        // y
+        if (Math.abs(diff.y) <= snapThreshold.y) {
+            next.y = this.rotateTarget.y
+        } else {
+            const m = Math.min(Math.abs(diff.y), step.y)
+            next.y += Math.sign(diff.y) * m
+        }
+        // z
+        if (Math.abs(diff.z) <= snapThreshold.z) {
+            next.z = this.rotateTarget.z
+        } else {
+            const m = Math.min(Math.abs(diff.z), step.z)
+            next.z += Math.sign(diff.z) * m
+        }
+
+        obj.rotation.set(next.x, next.y, next.z)
+
+        const done =
+            next.x === this.rotateTarget.x &&
+            next.y === this.rotateTarget.y &&
+            next.z === this.rotateTarget.z
+        if (done) {
+            this.rotating = false
+            this.rotateTarget = undefined
+            this.rotateInitialRemaining = undefined
+        }
     }
 
     /**

@@ -1,7 +1,5 @@
 import { modelRegistry } from './ModelRegistry'
 import type { ModelRegistryCreateConfig } from './ModelRegistry'
-import { ModelLoadable } from './ModelLoadable'
-import { SimpleModel } from './SimpleModel'
 import { RightHandAxes } from '../models/RightHandAxes'
 import {
   IndustrialFloor,
@@ -26,42 +24,12 @@ import {
 import { EzTreeModel } from '../models/EzTreeModel'
 
 function registerBuiltins(): void {
-  modelRegistry.register({
-    id: 'gltf',
-    label: 'GLB/GLTF',
-    category: 'loadable',
-    create(config: ModelRegistryCreateConfig) {
-      const name = config.name ?? config.id ?? 'gltf'
-      const source = config.source ?? ''
-      return new ModelLoadable(name, 'gltf', source)
-    }
-  })
-
-  modelRegistry.register({
-    id: 'fbx',
-    label: 'FBX',
-    category: 'loadable',
-    create(config: ModelRegistryCreateConfig) {
-      const name = config.name ?? config.id ?? 'fbx'
-      const source = config.source ?? ''
-      return new ModelLoadable(name, 'fbx', source)
-    }
-  })
-
-  modelRegistry.register({
-    id: 'simple',
-    label: 'Simple',
-    category: 'builtin',
-    create(config: ModelRegistryCreateConfig) {
-      const name = config.name ?? config.id ?? 'simple'
-      return new SimpleModel(name)
-    }
-  })
-
+  // gltf、fbx、simple 不注册为可直接选的模型类型，由 ModelLoadable/SimpleModel 继承使用；预设或配置中 typeId 为 gltf/fbx/simple 时由编辑器侧直接创建实例
   modelRegistry.register({
     id: 'axes',
     label: 'Right-hand Axes',
     category: 'builtin',
+    group: 'equipment',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'RightHandAxes'
       return new RightHandAxes(name)
@@ -72,6 +40,8 @@ function registerBuiltins(): void {
     id: 'floor-industrial',
     label: 'Industrial Floor',
     category: 'builtin',
+    group: 'infrastructure',
+    supportedProps: IndustrialFloor.supportedProps,
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'IndustrialFloor'
       return new IndustrialFloor(name)
@@ -82,6 +52,7 @@ function registerBuiltins(): void {
     id: 'door-single',
     label: 'Single Door',
     category: 'builtin',
+    group: 'infrastructure',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'SingleDoor'
       return new SingleDoor(name)
@@ -92,6 +63,7 @@ function registerBuiltins(): void {
     id: 'lane-chevron',
     label: 'Lane Chevron',
     category: 'builtin',
+    group: 'decoration',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'LaneChevron'
       return new LaneChevron(name)
@@ -102,6 +74,7 @@ function registerBuiltins(): void {
     id: 'compass-nesw',
     label: 'Compass N/E/S/W',
     category: 'builtin',
+    group: 'decoration',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'CompassNESW'
       return new CompassNESW(name)
@@ -112,6 +85,7 @@ function registerBuiltins(): void {
     id: 'label-board',
     label: 'Label Board',
     category: 'builtin',
+    group: 'decoration',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'LabelBoard'
       return new LabelBoard(name)
@@ -122,6 +96,7 @@ function registerBuiltins(): void {
     id: 'simple-wall',
     label: 'Simple Wall',
     category: 'builtin',
+    group: 'infrastructure',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'SimpleWall'
       return new SimpleWall(name)
@@ -132,6 +107,7 @@ function registerBuiltins(): void {
     id: 'power-cabinet',
     label: 'Power Cabinet',
     category: 'builtin',
+    group: 'equipment',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'PowerCabinet'
       return new PowerCabinet(name)
@@ -142,6 +118,7 @@ function registerBuiltins(): void {
     id: 'power-module',
     label: 'Power Module',
     category: 'builtin',
+    group: 'equipment',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'PowerModule'
       return new PowerModule(name)
@@ -152,6 +129,7 @@ function registerBuiltins(): void {
     id: 'monitor-screen',
     label: 'Monitor Screen',
     category: 'builtin',
+    group: 'equipment',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'MonitorScreen'
       return new MonitorScreen(name)
@@ -162,6 +140,7 @@ function registerBuiltins(): void {
     id: 'monitor-screen-no-stand',
     label: 'Monitor Screen (No Stand)',
     category: 'builtin',
+    group: 'equipment',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'MonitorScreenNoStand'
       return new MonitorScreenNoStand(name)
@@ -172,6 +151,7 @@ function registerBuiltins(): void {
     id: 'light-strip',
     label: 'Light Strip',
     category: 'builtin',
+    group: 'decoration',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'LightStrip'
       return new LightStrip(name)
@@ -182,6 +162,7 @@ function registerBuiltins(): void {
     id: 'villa-2f',
     label: 'Villa (2F)',
     category: 'builtin',
+    group: 'infrastructure',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'Villa2F'
       return new Villa2F(name)
@@ -192,6 +173,7 @@ function registerBuiltins(): void {
     id: 'building-10f',
     label: 'Building (10F)',
     category: 'builtin',
+    group: 'infrastructure',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'Building10F'
       return new Building10F(name)
@@ -202,6 +184,8 @@ function registerBuiltins(): void {
     id: 'agv',
     label: 'AGV',
     category: 'builtin',
+    group: 'equipment',
+    supportedProps: AGV.supportedProps,
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'AGV'
       return new AGV(name)
@@ -212,6 +196,8 @@ function registerBuiltins(): void {
     id: 'forklift',
     label: 'Forklift',
     category: 'builtin',
+    group: 'equipment',
+    supportedProps: Forklift.supportedProps,
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'Forklift'
       return new Forklift(name)
@@ -222,6 +208,7 @@ function registerBuiltins(): void {
     id: 'laser-beam',
     label: 'Laser Beam',
     category: 'builtin',
+    group: 'decoration',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'LaserBeam'
       return new LaserBeam(name)
@@ -232,6 +219,7 @@ function registerBuiltins(): void {
     id: 'simple-tree',
     label: 'Tree',
     category: 'builtin',
+    group: 'decoration',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'SimpleTree'
       return new SimpleTree(name)
@@ -242,6 +230,7 @@ function registerBuiltins(): void {
     id: 'grass-patch',
     label: 'Grass Patch',
     category: 'builtin',
+    group: 'decoration',
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'GrassPatch'
       return new GrassPatch(name)
@@ -252,6 +241,7 @@ function registerBuiltins(): void {
     id: 'ez-tree',
     label: 'Tree (EZ-Tree)',
     category: 'builtin',
+    group: 'decoration',
     supportedProps: EzTreeModel.supportedProps,
     create(config: ModelRegistryCreateConfig) {
       const name = config.name ?? config.id ?? 'EzTree'

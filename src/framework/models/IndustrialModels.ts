@@ -13,27 +13,77 @@ import {
   SpriteMaterial,
   Vector3
 } from 'three'
+import type { PropDefinition } from '../model/ModelRegistry'
 import { Model } from '../model/Model'
 
-/** 工业环境通用路面（自发光、不依赖灯光），深灰底 + 车道线 */
+const DEFAULT_FLOOR_WIDTH = 20
+const DEFAULT_FLOOR_DEPTH = 10
+const LANE_STRIP_HEIGHT = 0.08
+
+const DEVICE_STATUS = ['normal', 'fault'] as const
+type DeviceStatus = (typeof DEVICE_STATUS)[number]
+
+function parseDeviceStatus(v: unknown): DeviceStatus | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim().toLowerCase()
+  if (s === 'normal' || s === 'ok' || s === 'running') return 'normal'
+  if (s === 'fault' || s === 'error' || s === 'fail' || s === 'alarm') return 'fault'
+  return null
+}
+
+/** 工业环境通用路面（自发光、不依赖灯光），深灰底 + 车道线；支持 prop 修改尺寸 */
 export class IndustrialFloor extends Model {
+  static supportedProps: PropDefinition[] = [
+    { key: 'width', label: '宽度' },
+    { key: 'depth', label: '深度' }
+  ]
+
+  private _width = DEFAULT_FLOOR_WIDTH
+  private _depth = DEFAULT_FLOOR_DEPTH
+  private readonly floorMesh: Mesh
+  private readonly laneMesh: Mesh
+
   constructor(name = 'IndustrialFloor') {
     super(name)
     const scene = new Scene()
-    const geom = new PlaneGeometry(20, 10)
+    const geom = new PlaneGeometry(this._width, this._depth)
     const mat = new MeshBasicMaterial({ color: 0x222630, side: DoubleSide })
     const floor = new Mesh(geom, mat)
     floor.rotation.x = -Math.PI / 2
     scene.add(floor)
+    this.floorMesh = floor
 
-    const laneGeom = new PlaneGeometry(20, 0.08)
+    const laneGeom = new PlaneGeometry(this._width, LANE_STRIP_HEIGHT)
     const laneMat = new MeshBasicMaterial({ color: 0xfff59d, side: DoubleSide })
     const lane = new Mesh(laneGeom, laneMat)
     lane.position.set(0, 0.01, 0)
     lane.rotation.x = -Math.PI / 2
     scene.add(lane)
+    this.laneMesh = lane
 
     this.setScene(scene)
+  }
+
+  private refreshFloorGeometry(): void {
+    this.floorMesh.geometry.dispose()
+    this.floorMesh.geometry = new PlaneGeometry(this._width, this._depth)
+    this.laneMesh.geometry.dispose()
+    this.laneMesh.geometry = new PlaneGeometry(this._width, LANE_STRIP_HEIGHT)
+  }
+
+  override propUpdate(key: string, value: unknown): void {
+    const num = typeof value === 'number' ? value : Number(value)
+    if (key === 'width' && Number.isFinite(num) && num > 0) {
+      this._width = num
+      this.refreshFloorGeometry()
+      return
+    }
+    if (key === 'depth' && Number.isFinite(num) && num > 0) {
+      this._depth = num
+      this.refreshFloorGeometry()
+      return
+    }
+    super.propUpdate(key, value)
   }
 }
 
@@ -721,6 +771,16 @@ export class Building10F extends Model {
 
 /** AGV（自动导引车）：底盘 + 载货面 + 四轮 + 前侧指示灯，自发光 */
 export class AGV extends Model {
+  static supportedProps: PropDefinition[] = [
+    { key: 'status', label: '状态', enum: ['normal', 'fault'] }
+  ]
+
+  private status: DeviceStatus = 'normal'
+  private readonly statusIndicatorMat: MeshBasicMaterial
+  private blinkElapsed = 0
+  private blinkOn = true
+  private static readonly BLINK_INTERVAL_S = 0.2
+
   constructor(name = 'AGV') {
     super(name)
     const scene = new Scene()
@@ -736,8 +796,8 @@ export class AGV extends Model {
 
     const deckH = 0.06
     const deckGeom = new BoxGeometry(bodyL * 0.92, deckH, bodyW * 0.92)
-    const deckMat = new MeshBasicMaterial({ color: 0x475569 })
-    const deck = new Mesh(deckGeom, deckMat)
+    this.statusIndicatorMat = new MeshBasicMaterial({ color: 0x475569 })
+    const deck = new Mesh(deckGeom, this.statusIndicatorMat)
     deck.position.set(0, bodyH + deckH / 2, 0)
     scene.add(deck)
 
@@ -797,10 +857,61 @@ export class AGV extends Model {
 
     this.setScene(scene)
   }
+
+  private applyStatusIndicator(): void {
+    if (this.status === 'fault') {
+      this.statusIndicatorMat.color.setHex(this.blinkOn ? 0xef4444 : 0x475569)
+      return
+    }
+    this.statusIndicatorMat.color.setHex(0x475569)
+  }
+
+  override update(delta: number) {
+    super.update(delta)
+    if (this.status !== 'fault') {
+      // 退出故障态后复位闪烁状态，避免再次进入时相位混乱
+      if (this.blinkElapsed !== 0 || this.blinkOn !== true) {
+        this.blinkElapsed = 0
+        this.blinkOn = true
+      }
+      return
+    }
+    this.blinkElapsed += delta
+    while (this.blinkElapsed >= AGV.BLINK_INTERVAL_S) {
+      this.blinkElapsed -= AGV.BLINK_INTERVAL_S
+      this.blinkOn = !this.blinkOn
+      this.applyStatusIndicator()
+    }
+  }
+
+  override propUpdate(key: string, value: unknown): void {
+    if (key === 'status') {
+      const s = parseDeviceStatus(value)
+      if (!s) return
+      this.status = s
+      if (this.status !== 'fault') {
+        this.blinkElapsed = 0
+        this.blinkOn = true
+      }
+      this.applyStatusIndicator()
+      return
+    }
+    super.propUpdate(key, value)
+  }
 }
 
 /** 叉车：底盘 + 驾驶室 + 门架 + 货叉 + 配重 + 四轮，自发光 */
 export class Forklift extends Model {
+  static supportedProps: PropDefinition[] = [
+    { key: 'status', label: '状态', enum: ['normal', 'fault'] }
+  ]
+
+  private status: DeviceStatus = 'normal'
+  private readonly statusIndicatorMat: MeshBasicMaterial
+  private blinkElapsed = 0
+  private blinkOn = true
+  private static readonly BLINK_INTERVAL_S = 0.2
+
   constructor(name = 'Forklift') {
     super(name)
     const scene = new Scene()
@@ -818,8 +929,8 @@ export class Forklift extends Model {
     const cabD = 0.4
     const cabH = 0.45
     const cabGeom = new BoxGeometry(cabW, cabH, cabD)
-    const cabMat = new MeshBasicMaterial({ color: 0xd97706 })
-    const cab = new Mesh(cabGeom, cabMat)
+    this.statusIndicatorMat = new MeshBasicMaterial({ color: 0xd97706 })
+    const cab = new Mesh(cabGeom, this.statusIndicatorMat)
     cab.position.set(-bodyL / 2 + cabW / 2 + 0.08, bodyH + cabH / 2, 0)
     scene.add(cab)
 
@@ -878,6 +989,46 @@ export class Forklift extends Model {
     })
 
     this.setScene(scene)
+  }
+
+  private applyStatusIndicator(): void {
+    if (this.status === 'fault') {
+      this.statusIndicatorMat.color.setHex(this.blinkOn ? 0xef4444 : 0xd97706)
+      return
+    }
+    this.statusIndicatorMat.color.setHex(0xd97706)
+  }
+
+  override update(delta: number) {
+    super.update(delta)
+    if (this.status !== 'fault') {
+      if (this.blinkElapsed !== 0 || this.blinkOn !== true) {
+        this.blinkElapsed = 0
+        this.blinkOn = true
+      }
+      return
+    }
+    this.blinkElapsed += delta
+    while (this.blinkElapsed >= Forklift.BLINK_INTERVAL_S) {
+      this.blinkElapsed -= Forklift.BLINK_INTERVAL_S
+      this.blinkOn = !this.blinkOn
+      this.applyStatusIndicator()
+    }
+  }
+
+  override propUpdate(key: string, value: unknown): void {
+    if (key === 'status') {
+      const s = parseDeviceStatus(value)
+      if (!s) return
+      this.status = s
+      if (this.status !== 'fault') {
+        this.blinkElapsed = 0
+        this.blinkOn = true
+      }
+      this.applyStatusIndicator()
+      return
+    }
+    super.propUpdate(key, value)
   }
 }
 

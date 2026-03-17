@@ -23,6 +23,8 @@ export interface ModelTypeDefinition {
   label: string
   /** 可选分类，如 'loadable'、'builtin' */
   category?: string
+  /** 编辑器左侧分组展示：'decoration' 装饰物、'equipment' 设备、'infrastructure' 基建，未设或其它值归入「其他」 */
+  group?: string
   /**
    * 根据配置创建模型实例。
    * 配置通常包含 name；可加载类型需 source 与 category（或 format 映射为 category）。
