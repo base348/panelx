@@ -18,14 +18,14 @@
         ]
       },
       "models": [
-        { "id": "ProductLine-1", "source": "/product-line.glb", "format": "gltf", "visible": true, "position": [-2.25, 0.5, 0], "scale": 5 },
-        { "id": "ProductLine-2", "source": "/product-line.glb", "format": "gltf", "visible": true, "position": [-3.75, 0.5, 0], "scale": 5 },
-        { "id": "ProductLine-3", "source": "/product-line.glb", "format": "gltf", "visible": true, "position": [-4.5, 0.5, 0], "scale": 5 },
-        { "id": "ProductLine-4", "source": "/product-line.glb", "format": "gltf", "visible": true, "position": [-0.75, 0.5, 0], "scale": 5 },
-        { "id": "ProductLine-5", "source": "/product-line.glb", "format": "gltf", "visible": true, "position": [0.75, 0.5, 0], "scale": 5 },
-        { "id": "ProductLine-6", "source": "/product-line.glb", "format": "gltf", "visible": true, "position": [2.25, 0.5, 0], "scale": 5 },
-        { "id": "ProductLine-7", "source": "/product-line.glb", "format": "gltf", "visible": true, "position": [3.75, 0.5, 0], "scale": 5 },
-        { "id": "ProductLine-8", "source": "/product-line.glb", "format": "gltf", "visible": true, "position": [5.25, 0.5, 0], "scale": 5 }
+        { "id": "ProductLine-1", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [-2.25, 0.5, 0], "scale": 5 },
+        { "id": "ProductLine-2", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [-3.75, 0.5, 0], "scale": 5 },
+        { "id": "ProductLine-3", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [-4.5, 0.5, 0], "scale": 5 },
+        { "id": "ProductLine-4", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [-0.75, 0.5, 0], "scale": 5 },
+        { "id": "ProductLine-5", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [0.75, 0.5, 0], "scale": 5 },
+        { "id": "ProductLine-6", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [2.25, 0.5, 0], "scale": 5 },
+        { "id": "ProductLine-7", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [3.75, 0.5, 0], "scale": 5 },
+        { "id": "ProductLine-8", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [5.25, 0.5, 0], "scale": 5 }
       ],
       "infoBoxes": [
         { "id": "infobox-srm005", "modelId": "ProductLine-5", "offset": [0, 1.4, 0], "title": "#5机", "equipmentId": "SRM005", "status": "故障", "statusType": "fault", "runningTime": "3.5 h", "message": "当前设备故障,正在抢修中", "rotation": [0, 0.7853981633974483, 0] },

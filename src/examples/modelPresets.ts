@@ -1,7 +1,8 @@
 /**
  * 3D 模型预设：供 3D 编辑器「可用模型」列表展示与预加载使用。
  * source 为以 / 开头的路径时，会从站点根目录请求（Vite 下即 public 目录）。
- * 请将对应 .glb/.fbx 文件放入 public 目录，否则请求会 404 并触发 "Unexpected token '<'"（返回 index.html）。
+ * 推荐将可加载模型文件统一放到 public/models/ 下，并用 /models/xxx.glb 形式引用。
+ * 若资源路径错误会 404，并触发 "Unexpected token '<'"（返回 index.html）。
  */
 export interface ModelPresetItem {
   id: string
@@ -16,18 +17,5 @@ export interface ModelPresetItem {
 
 /** 预加载的 3D 模型预设列表 */
 export const modelPresets: ModelPresetItem[] = [
-  {
-    id: 'robot',
-    label: 'Robot',
-    typeId: 'gltf',
-    source: '/RobotExpressive.glb',
-    name: 'robot'
-  },
-  {
-    id: 'product-line',
-    label: 'Product Line',
-    typeId: 'gltf',
-    source: '/product-line.glb',
-    name: 'product-line'
-  }
+
 ]

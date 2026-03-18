@@ -240,6 +240,12 @@ export class Model extends Object3D{
     update(delta: number) {
         const obj = this.scene ?? this
 
+        // 动画：若存在 mixer，则每帧推进
+        const anyThis = this as unknown as { actionMixer?: AnimationMixer }
+        if (anyThis.actionMixer && typeof anyThis.actionMixer.update === 'function') {
+            anyThis.actionMixer.update(delta)
+        }
+
         // 移动任务
         if (this.moving && this.moveTarget) {
             const currentPos = obj.position.clone()

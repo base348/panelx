@@ -1,0 +1,7 @@
+*.glb
+*.gltf
+*.fbx
+*.obj
+*.local.ts
+*.local.tsx
+local.*

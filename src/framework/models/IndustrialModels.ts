@@ -30,11 +30,20 @@ function parseDeviceStatus(v: unknown): DeviceStatus | null {
   return null
 }
 
-/** 工业环境通用路面（自发光、不依赖灯光），深灰底；支持 prop 修改尺寸 */
+function parseColorHex(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return Math.floor(value)
+  if (typeof value !== 'string') return null
+  const s = value.trim().replace(/^#/, '')
+  const n = parseInt(s, 16)
+  return Number.isFinite(n) ? n : null
+}
+
+/** 工业环境通用路面（自发光、不依赖灯光），深灰底；支持 prop 修改尺寸与颜色 */
 export class IndustrialFloor extends Model {
   static supportedProps: PropDefinition[] = [
     { key: 'width', label: '宽度' },
-    { key: 'depth', label: '深度' }
+    { key: 'depth', label: '深度' },
+    { key: 'color', label: '颜色（十六进制，如 222630 或 #222630）' }
   ]
 
   private _width = DEFAULT_FLOOR_WIDTH
@@ -60,6 +69,14 @@ export class IndustrialFloor extends Model {
   }
 
   override propUpdate(key: string, value: unknown): void {
+    if (key === 'color') {
+      const hex = parseColorHex(value)
+      if (hex !== null) {
+        const mat = this.floorMesh.material as MeshBasicMaterial
+        if (mat.color) mat.color.setHex(hex)
+      }
+      return
+    }
     const num = typeof value === 'number' ? value : Number(value)
     if (key === 'width' && Number.isFinite(num) && num > 0) {
       this._width = num
@@ -214,8 +231,15 @@ export class CompassNESW extends Model {
   }
 }
 
-/** 可显示中文名称的自发光模块（简单牌子） */
+/** 可显示中文名称的自发光模块（简单牌子）；支持 prop 修改文字内容 */
 export class LabelBoard extends Model {
+  static supportedProps: PropDefinition[] = [
+    { key: 'text', label: '文字内容' }
+  ]
+
+  private _text = '设备 A'
+  private readonly board: Mesh
+
   constructor(name = 'LabelBoard') {
     super(name)
     const scene = new Scene()
@@ -224,20 +248,7 @@ export class LabelBoard extends Model {
     const canvas = document.createElement('canvas')
     canvas.width = size
     canvas.height = size
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      ctx.clearRect(0, 0, size, size)
-      ctx.fillStyle = 'rgba(15,23,42,0.9)'
-      ctx.fillRect(0, 0, size, size)
-      ctx.strokeStyle = '#38bdf8'
-      ctx.lineWidth = 6
-      ctx.strokeRect(20, 20, size - 40, size - 40)
-      ctx.fillStyle = '#e5e7eb'
-      ctx.font = 'bold 120px system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText('设备 A', size / 2, size / 2)
-    }
+    this.drawLabelCanvas(canvas, this._text)
 
     const tex = new CanvasTexture(canvas)
     const mat = new MeshBasicMaterial({ map: tex, transparent: true, side: DoubleSide })
@@ -245,8 +256,40 @@ export class LabelBoard extends Model {
     const board = new Mesh(geom, mat)
     board.position.set(0, 1.6, 0)
     scene.add(board)
+    this.board = board
 
     this.setScene(scene)
+  }
+
+  private drawLabelCanvas(canvas: HTMLCanvasElement, text: string): void {
+    const size = canvas.width
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, size, size)
+    ctx.fillStyle = 'rgba(15,23,42,0.9)'
+    ctx.fillRect(0, 0, size, size)
+    ctx.strokeStyle = '#38bdf8'
+    ctx.lineWidth = 6
+    ctx.strokeRect(20, 20, size - 40, size - 40)
+    ctx.fillStyle = '#e5e7eb'
+    ctx.font = 'bold 120px system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text || ' ', size / 2, size / 2)
+  }
+
+  override propUpdate(key: string, value: unknown): void {
+    if (key === 'text') {
+      this._text = value != null ? String(value) : ''
+      const mat = this.board.material as MeshBasicMaterial
+      const tex = mat?.map
+      if (tex && tex instanceof CanvasTexture && tex.image) {
+        this.drawLabelCanvas(tex.image as HTMLCanvasElement, this._text)
+        tex.needsUpdate = true
+      }
+      return
+    }
+    super.propUpdate(key, value)
   }
 }
 

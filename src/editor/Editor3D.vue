@@ -775,8 +775,10 @@ interface DragPayloadPreset {
 const DRAG_TYPE = 'application/panelx-3d-model'
 
 /** 模型类型分组：顺序与展示用标签（编辑器左侧按此分组展示） */
-const MODEL_GROUP_ORDER = ['decoration', 'equipment', 'infrastructure'] as const
+const MODEL_GROUP_ORDER = ['loadable', 'example', 'decoration', 'equipment', 'infrastructure'] as const
 const MODEL_GROUP_LABELS: Record<string, string> = {
+  loadable: '可加载模型',
+  example: '二次开发模型',
   decoration: '装饰物',
   equipment: '设备',
   infrastructure: '基建'
@@ -788,7 +790,10 @@ const modelTypesByGroup = computed(() => {
   const all = modelRegistry.getTypes()
   const map = new Map<string, ModelTypeDefinition[]>()
   for (const def of all) {
-    const key = (def.group && MODEL_GROUP_ORDER.includes(def.group as (typeof MODEL_GROUP_ORDER)[number])) ? def.group! : MODEL_GROUP_OTHER
+    // category 优先：examples 本地/二开模型单独分组（无需每个模型再手动改 group）
+    const categoryKey = def.category === 'example' ? 'example' : undefined
+    const keyRaw = categoryKey ?? def.group
+    const key = (keyRaw && MODEL_GROUP_ORDER.includes(keyRaw as (typeof MODEL_GROUP_ORDER)[number])) ? keyRaw! : MODEL_GROUP_OTHER
     if (!map.has(key)) map.set(key, [])
     map.get(key)!.push(def)
   }

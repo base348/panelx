@@ -123,7 +123,7 @@ export type Model3DFormat = 'gltf' | 'fbx'
 export interface Model3DItemConfig {
   /** 模型唯一 id，用于从 store 获取实例 */
   id: string
-  /** 模型资源地址，如 /RobotExpressive.glb、/product_line.fbx */
+  /** 模型资源地址，如 /models/RobotExpressive.glb、/models/product-line.glb、/models/product_line.fbx */
   source: string
   /** 格式：gltf 或 fbx，默认 gltf */
   format?: Model3DFormat
