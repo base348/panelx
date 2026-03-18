@@ -1,0 +1,188 @@
+<template>
+  <aside class="panelx-editor3d-sidebar">
+    <button type="button" class="panelx-editor3d-group-header" @click="leftGroups.sceneOpen = !leftGroups.sceneOpen">
+      <span>场景尺寸</span>
+      <span class="panelx-editor3d-group-toggle">{{ leftGroups.sceneOpen ? '−' : '+' }}</span>
+    </button>
+    <div v-if="leftGroups.sceneOpen" class="panelx-editor3d-size-display">
+      <div class="panelx-editor3d-size-row">
+        <span class="panelx-editor3d-size-label">Dashboard</span>
+        <span class="panelx-editor3d-size-value">{{ designSize.width }} × {{ designSize.height }}</span>
+      </div>
+      <div class="panelx-editor3d-size-row">
+        <span class="panelx-editor3d-size-label">Viewport</span>
+        <span class="panelx-editor3d-size-value">{{ viewportSize.x }} × {{ viewportSize.y }} (DPR {{ dpr }})</span>
+      </div>
+      <div class="panelx-editor3d-size-row">
+        <span class="panelx-editor3d-size-label">Canvas</span>
+        <span class="panelx-editor3d-size-value">{{ canvasPixelSize.x }} × {{ canvasPixelSize.y }} px</span>
+      </div>
+      <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
+        <span class="panelx-editor3d-size-label">3D设计</span>
+        <div class="panelx-editor3d-size-inputs">
+          <label>
+            X
+            <input v-model.number="designSize3D.width" type="number" step="any" min="0.0001" />
+          </label>
+          <label>
+            Y
+            <input v-model.number="designSize3D.height" type="number" step="any" min="0.0001" />
+          </label>
+          <label>
+            Z
+            <input v-model.number="worldSizeZ" type="number" step="any" />
+          </label>
+        </div>
+      </div>
+      <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
+        <span class="panelx-editor3d-size-label">比例尺</span>
+        <div class="panelx-editor3d-size-inputs">
+          <label>
+            S
+            <input v-model.number="worldScale" type="number" step="any" min="0" />
+          </label>
+          <span class="panelx-editor3d-size-value">
+            World {{ sceneWorldSize.x.toFixed(3) }} × {{ sceneWorldSize.y.toFixed(3) }} × {{ sceneWorldSize.z.toFixed(3) }}
+          </span>
+        </div>
+      </div>
+      <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
+        <span class="panelx-editor3d-size-label">坐标系</span>
+        <div class="panelx-editor3d-size-inputs">
+          <label class="panelx-editor3d-checkbox">
+            <input v-model="designCoord.enabled" type="checkbox" />
+            XZ 设计坐标
+          </label>
+          <label>
+            OX
+            <input v-model.number="designCoord.originX" type="number" step="any" />
+          </label>
+          <label>
+            OY
+            <input v-model.number="designCoord.originY" type="number" step="any" />
+          </label>
+        </div>
+      </div>
+      <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
+        <span class="panelx-editor3d-size-label">Lights</span>
+        <div class="panelx-editor3d-size-inputs">
+          <label>
+            Amb
+            <input v-model.number="sceneLights.ambient" type="number" step="0.1" />
+          </label>
+          <label>
+            Hem
+            <input v-model.number="sceneLights.hemisphere" type="number" step="0.1" />
+          </label>
+          <label>
+            Pt
+            <input v-model.number="sceneLights.point" type="number" step="0.1" />
+          </label>
+        </div>
+      </div>
+      <div class="panelx-editor3d-size-row panelx-editor3d-size-row-bg">
+        <span class="panelx-editor3d-size-label">背景色</span>
+        <div class="panelx-editor3d-color-wrap">
+          <input v-model="editorBackgroundColor" type="color" class="panelx-editor3d-color-picker" title="选择背景色" />
+          <input v-model="editorBackgroundColor" type="text" class="panelx-editor3d-color-hex" placeholder="#0f172a" />
+        </div>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="panelx-editor3d-group-header panelx-editor3d-section"
+      @click="leftGroups.typeOpen = !leftGroups.typeOpen"
+    >
+      <span>模型类型</span>
+      <span class="panelx-editor3d-group-toggle">{{ leftGroups.typeOpen ? '−' : '+' }}</span>
+    </button>
+    <div v-if="leftGroups.typeOpen" class="panelx-editor3d-type-groups">
+      <template v-for="g in modelTypesByGroup" :key="'group-' + g.groupKey">
+        <div class="panelx-editor3d-group-subheader">{{ g.groupLabel }}</div>
+        <div
+          v-for="item in g.items"
+          :key="'type-' + item.id"
+          class="panelx-editor3d-model-item"
+          draggable="true"
+          :title="`${item.label} (${item.id})`"
+          @dragstart="onDragStartType($event, item)"
+        >
+          <span class="panelx-editor3d-model-label">{{ item.label }}</span>
+        </div>
+      </template>
+    </div>
+
+    <template v-if="presetModels?.length">
+      <button
+        type="button"
+        class="panelx-editor3d-group-header panelx-editor3d-section"
+        @click="leftGroups.presetOpen = !leftGroups.presetOpen"
+      >
+        <span>可用模型（预设）</span>
+        <span class="panelx-editor3d-group-toggle">{{ leftGroups.presetOpen ? '−' : '+' }}</span>
+      </button>
+      <div v-if="leftGroups.presetOpen">
+        <div
+          v-for="p in presetModels"
+          :key="'preset-' + p.id"
+          class="panelx-editor3d-model-item panelx-editor3d-preset"
+          draggable="true"
+          :title="`${p.label} · ${p.typeId} · ${p.source}`"
+          @dragstart="onDragStartPreset($event, p)"
+        >
+          <span class="panelx-editor3d-model-label">{{ p.label }}</span>
+          <span class="panelx-editor3d-model-category">{{ p.typeId }}</span>
+        </div>
+      </div>
+    </template>
+
+    <button
+      type="button"
+      class="panelx-editor3d-group-header panelx-editor3d-section"
+      @click="leftGroups.opsOpen = !leftGroups.opsOpen"
+    >
+      <span>操作</span>
+      <span class="panelx-editor3d-group-toggle">{{ leftGroups.opsOpen ? '−' : '+' }}</span>
+    </button>
+    <button type="button" class="panelx-editor3d-btn" @click="exportConfig">导出配置</button>
+    <button type="button" class="panelx-editor3d-btn" @click="triggerImportConfig">导入配置</button>
+  </aside>
+</template>
+
+<script setup lang="ts">
+import type { PropType } from 'vue'
+import type { ModelTypeDefinition } from '../../../framework'
+import type { StyleValue } from 'vue'
+
+// 双向绑定：保留原 Editor3D 的 v-model 行为（避免 prop 只读问题）
+const leftGroups = defineModel<any>('leftGroups', { required: true })
+const designSize = defineModel<any>('designSize', { required: true })
+const designSize3D = defineModel<any>('designSize3D', { required: true })
+const worldScale = defineModel<any>('worldScale', { required: true })
+const worldSizeZ = defineModel<any>('worldSizeZ', { required: true })
+const designCoord = defineModel<any>('designCoord', { required: true })
+const sceneLights = defineModel<any>('sceneLights', { required: true })
+const editorBackgroundColor = defineModel<any>('editorBackgroundColor', { required: true })
+
+defineProps({
+  dpr: { type: Number, required: true },
+  viewportSize: { type: Object as PropType<{ x: number; y: number }>, required: true },
+  canvasPixelSize: { type: Object as PropType<{ x: number; y: number }>, required: true },
+  sceneWorldSize: { type: Object as PropType<{ x: number; y: number; z: number }>, required: true },
+  worldOuterStyle: { type: Object as PropType<StyleValue>, required: true },
+  modelTypesByGroup: {
+    type: Array as PropType<Array<{ groupKey: string; groupLabel: string; items: ModelTypeDefinition[] }>>,
+    required: true
+  },
+  presetModels: { type: Array as PropType<Array<{ id: string; label: string; typeId: string; source?: string; name?: string }>>, required: false },
+  onDragStartType: { type: Function as PropType<(ev: DragEvent, item: ModelTypeDefinition) => void>, required: true },
+  onDragStartPreset: {
+    type: Function as PropType<(ev: DragEvent, p: { id: string; label: string; typeId: string; source?: string; name?: string }) => void>,
+    required: true
+  },
+  exportConfig: { type: Function as PropType<() => void>, required: true },
+  triggerImportConfig: { type: Function as PropType<() => void>, required: true }
+})
+</script>
+

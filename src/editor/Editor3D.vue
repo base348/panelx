@@ -1,603 +1,81 @@
 <template>
   <div class="panelx-editor3d">
-    <aside class="panelx-editor3d-sidebar">
-      <button type="button" class="panelx-editor3d-group-header" @click="leftGroups.sceneOpen = !leftGroups.sceneOpen">
-        <span>场景尺寸</span>
-        <span class="panelx-editor3d-group-toggle">{{ leftGroups.sceneOpen ? '−' : '+' }}</span>
-      </button>
-      <div v-if="leftGroups.sceneOpen" class="panelx-editor3d-size-display">
-        <div class="panelx-editor3d-size-row">
-          <span class="panelx-editor3d-size-label">Dashboard</span>
-          <span class="panelx-editor3d-size-value">{{ designSize.width }} × {{ designSize.height }}</span>
-        </div>
-        <div class="panelx-editor3d-size-row">
-          <span class="panelx-editor3d-size-label">Viewport</span>
-          <span class="panelx-editor3d-size-value">{{ viewportSize.x }} × {{ viewportSize.y }} (DPR {{ dpr }})</span>
-        </div>
-        <div class="panelx-editor3d-size-row">
-          <span class="panelx-editor3d-size-label">Canvas</span>
-          <span class="panelx-editor3d-size-value">{{ canvasPixelSize.x }} × {{ canvasPixelSize.y }} px</span>
-        </div>
-        <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
-          <span class="panelx-editor3d-size-label">3D设计</span>
-          <div class="panelx-editor3d-size-inputs">
-            <label>
-              X
-              <input v-model.number="designSize3D.width" type="number" step="any" min="0.0001" />
-            </label>
-            <label>
-              Y
-              <input v-model.number="designSize3D.height" type="number" step="any" min="0.0001" />
-            </label>
-            <label>
-              Z
-              <input v-model.number="worldSizeZ" type="number" step="any" />
-            </label>
-          </div>
-        </div>
-        <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
-          <span class="panelx-editor3d-size-label">比例尺</span>
-          <div class="panelx-editor3d-size-inputs">
-            <label>
-              S
-              <input v-model.number="worldScale" type="number" step="any" min="0" />
-            </label>
-            <span class="panelx-editor3d-size-value">
-              World {{ sceneWorldSize.x.toFixed(3) }} × {{ sceneWorldSize.y.toFixed(3) }} × {{ sceneWorldSize.z.toFixed(3) }}
-            </span>
-          </div>
-        </div>
-        <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
-          <span class="panelx-editor3d-size-label">坐标系</span>
-          <div class="panelx-editor3d-size-inputs">
-            <label class="panelx-editor3d-checkbox">
-              <input v-model="designCoord.enabled" type="checkbox" />
-              XZ 设计坐标
-            </label>
-            <label>
-              OX
-              <input v-model.number="designCoord.originX" type="number" step="any" />
-            </label>
-            <label>
-              OY
-              <input v-model.number="designCoord.originY" type="number" step="any" />
-            </label>
-          </div>
-        </div>
-        <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
-          <span class="panelx-editor3d-size-label">Lights</span>
-          <div class="panelx-editor3d-size-inputs">
-            <label>
-              Amb
-              <input v-model.number="sceneLights.ambient" type="number" step="0.1" />
-            </label>
-            <label>
-              Hem
-              <input v-model.number="sceneLights.hemisphere" type="number" step="0.1" />
-            </label>
-            <label>
-              Pt
-              <input v-model.number="sceneLights.point" type="number" step="0.1" />
-            </label>
-          </div>
-        </div>
-        <div class="panelx-editor3d-size-row panelx-editor3d-size-row-bg">
-          <span class="panelx-editor3d-size-label">背景色</span>
-          <div class="panelx-editor3d-color-wrap">
-            <input
-              v-model="editorBackgroundColor"
-              type="color"
-              class="panelx-editor3d-color-picker"
-              title="选择背景色"
-            />
-            <input
-              v-model="editorBackgroundColor"
-              type="text"
-              class="panelx-editor3d-color-hex"
-              placeholder="#0f172a"
-            />
-          </div>
-        </div>
-      </div>
+    <LeftSidebar
+      v-model:leftGroups="leftGroups"
+      v-model:designSize="designSize"
+      v-model:designSize3D="designSize3D"
+      v-model:worldScale="worldScale"
+      v-model:worldSizeZ="worldSizeZ"
+      v-model:designCoord="designCoord"
+      v-model:sceneLights="sceneLights"
+      v-model:editorBackgroundColor="editorBackgroundColor"
+      :dpr="dpr"
+      :viewport-size="viewportSize"
+      :canvas-pixel-size="canvasPixelSize"
+      :scene-world-size="sceneWorldSize"
+      :world-outer-style="worldOuterStyle"
+      :model-types-by-group="modelTypesByGroup"
+      :preset-models="presetModels"
+      :on-drag-start-type="onDragStartType"
+      :on-drag-start-preset="onDragStartPreset"
+      :export-config="exportConfig"
+      :trigger-import-config="triggerImportConfig"
+    />
+    <input
+      ref="importInputRef"
+      type="file"
+      accept="application/json,.json"
+      class="panelx-editor3d-file-input"
+      @change="onImportConfigFile"
+    />
 
-      <button
-        type="button"
-        class="panelx-editor3d-group-header panelx-editor3d-section"
-        @click="leftGroups.typeOpen = !leftGroups.typeOpen"
-      >
-        <span>模型类型</span>
-        <span class="panelx-editor3d-group-toggle">{{ leftGroups.typeOpen ? '−' : '+' }}</span>
-      </button>
-      <div v-if="leftGroups.typeOpen" class="panelx-editor3d-type-groups">
-        <template v-for="g in modelTypesByGroup" :key="'group-' + g.groupKey">
-          <div class="panelx-editor3d-group-subheader">{{ g.groupLabel }}</div>
-          <div
-            v-for="item in g.items"
-            :key="'type-' + item.id"
-            class="panelx-editor3d-model-item"
-            draggable="true"
-            :title="`${item.label} (${item.id})`"
-            @dragstart="onDragStartType($event, item)"
-          >
-            <span class="panelx-editor3d-model-label">{{ item.label }}</span>
-          </div>
-        </template>
-      </div>
-
-      <template v-if="presetModels?.length">
-        <button
-          type="button"
-          class="panelx-editor3d-group-header panelx-editor3d-section"
-          @click="leftGroups.presetOpen = !leftGroups.presetOpen"
-        >
-          <span>可用模型（预设）</span>
-          <span class="panelx-editor3d-group-toggle">{{ leftGroups.presetOpen ? '−' : '+' }}</span>
-        </button>
-        <div v-if="leftGroups.presetOpen">
-          <div
-            v-for="p in presetModels"
-            :key="'preset-' + p.id"
-            class="panelx-editor3d-model-item panelx-editor3d-preset"
-            draggable="true"
-            :title="`${p.label} · ${p.typeId} · ${p.source}`"
-            @dragstart="onDragStartPreset($event, p)"
-          >
-            <span class="panelx-editor3d-model-label">{{ p.label }}</span>
-            <span class="panelx-editor3d-model-category">{{ p.typeId }}</span>
-          </div>
-        </div>
-      </template>
-
-      <button
-        type="button"
-        class="panelx-editor3d-group-header panelx-editor3d-section"
-        @click="leftGroups.opsOpen = !leftGroups.opsOpen"
-      >
-        <span>操作</span>
-        <span class="panelx-editor3d-group-toggle">{{ leftGroups.opsOpen ? '−' : '+' }}</span>
-      </button>
-      <button type="button" class="panelx-editor3d-btn" @click="exportConfig">
-        导出配置
-      </button>
-      <button type="button" class="panelx-editor3d-btn" @click="triggerImportConfig">
-        导入配置
-      </button>
-      <input
-        ref="importInputRef"
-        type="file"
-        accept="application/json,.json"
-        class="panelx-editor3d-file-input"
-        @change="onImportConfigFile"
-      />
-    </aside>
-    <main
-      class="panelx-editor3d-main"
-      :class="{ 'panelx-editor3d-main-drag-over': isDragOver }"
-      :style="{ background: editorBackgroundColor }"
-      @dragover.prevent="isDragOver = true"
+    <MainArea
+      :is-drag-over="isDragOver"
+      :editor-background-color="editorBackgroundColor"
+      :world-outer-style="worldOuterStyle"
+      :widgets3D="widgets3D"
+      :selected-widget-id="selectedWidgetId"
+      :floating-instance-list-open="floatingInstanceListOpen"
+      :get-widget-display-name="getWidgetDisplayName"
+      :format-widget-scale="formatWidgetScale"
+      :on-select-widget="onSelectWidget"
+      :clone-widget="cloneWidget"
+      :delete-widget="deleteWidget"
+      @dragover="isDragOver = true"
       @dragleave="isDragOver = false"
-      @drop.prevent="onDrop"
-    >
-      <!-- 主区域左上角：模型实例列表（浮动、可收缩） -->
-      <div
-        v-if="widgets3D.length"
-        class="panelx-editor3d-instance-float"
-        :class="{ collapsed: !floatingInstanceListOpen }"
-      >
-        <div
-          class="panelx-editor3d-instance-float-header"
-          @click="floatingInstanceListOpen = !floatingInstanceListOpen"
-        >
-          <span class="panelx-editor3d-instance-float-title">已添加 ({{ widgets3D.length }})</span>
-          <span class="panelx-editor3d-group-toggle">{{ floatingInstanceListOpen ? '−' : '+' }}</span>
-        </div>
-        <div v-show="floatingInstanceListOpen" class="panelx-editor3d-instance-float-body">
-          <ul class="panelx-editor3d-widget-list">
-            <li
-              v-for="w in widgets3D"
-              :key="w.id"
-              class="panelx-editor3d-widget-tag"
-              :class="{ active: selectedWidgetId === w.id }"
-            >
-              <span class="panelx-editor3d-widget-tag-text" @click="onSelectWidget(w)">
-                {{ getWidgetDisplayName(w) }} · {{ (w.props?.position as number[] | undefined)?.join(',') ?? '-' }} · 缩放
-                {{ formatWidgetScale(w.props?.scale) }}
-              </span>
-              <button
-                type="button"
-                class="panelx-editor3d-widget-clone"
-                title="克隆一个实例（复制位置/缩放/旋转/属性）"
-                @click.stop="cloneWidget(w)"
-              >
-                克隆
-              </button>
-              <button
-                type="button"
-                class="panelx-editor3d-widget-delete"
-                title="从主区域删除"
-                @click.stop="deleteWidget(w)"
-              >
-                删除
-              </button>
-            </li>
-          </ul>
-        </div>
-      </div>
-      <div class="panelx-editor3d-canvas">
-        <div class="panelx-editor3d-world-wrap" :style="worldOuterStyle">
-          <div id="panelx-editor3d-world" class="panelx-editor3d-world" />
-          <div v-if="!widgets3D.length" class="panelx-editor3d-world-hint">
-            拖入左侧模型到此处，放下后填写位置与缩放
-          </div>
-        </div>
-      </div>
-    </main>
+      @drop="onDrop"
+      @update:floatingInstanceListOpen="floatingInstanceListOpen = $event"
+    />
 
-    <!-- 右侧：当前选中模型的变换（位置 + 缩放） -->
-    <aside class="panelx-editor3d-sidebar panelx-editor3d-sidebar-right">
-      <button
-        type="button"
-        class="panelx-editor3d-group-header"
-        @click="rightGroups.transformOpen = !rightGroups.transformOpen"
-      >
-        <span>选中模型</span>
-        <span class="panelx-editor3d-group-toggle">{{ rightGroups.transformOpen ? '−' : '+' }}</span>
-      </button>
-      <p v-if="!selectedWidgetId" class="panelx-editor3d-right-empty">在左侧列表中点击模型以编辑</p>
-      <template v-else>
-        <div v-if="rightGroups.transformOpen" class="panelx-editor3d-pos-editor">
-          <div class="panelx-editor3d-pos-row">
-            <span class="panelx-editor3d-size-label">名称 (name)</span>
-            <div class="panelx-editor3d-size-inputs">
-              <input
-                v-model="selectedWidgetName"
-                type="text"
-                class="panelx-editor3d-props-value"
-                placeholder="可空，用于实例列表显示"
-              />
-            </div>
-          </div>
-          <div class="panelx-editor3d-pos-row">
-            <span class="panelx-editor3d-size-label">位置 (X/Y/Z)</span>
-            <div class="panelx-editor3d-size-inputs">
-              <label>
-                X
-                <input
-                  v-model.number="selectedPosition.x"
-                  type="number"
-                  step="any"
-                  :disabled="axisLock.x"
-                  @change="onPositionInputChange('x')"
-                />
-                <input type="checkbox" v-model="axisLock.x" title="锁定 X" />
-              </label>
-              <label>
-                Y
-                <input
-                  v-model.number="selectedPosition.y"
-                  type="number"
-                  step="any"
-                  :disabled="axisLock.y"
-                  @change="onPositionInputChange('y')"
-                />
-                <input type="checkbox" v-model="axisLock.y" title="锁定 Y" />
-              </label>
-              <label>
-                Z
-                <input
-                  v-model.number="selectedPosition.z"
-                  type="number"
-                  step="any"
-                  :disabled="axisLock.z"
-                  @change="onPositionInputChange('z')"
-                />
-                <input type="checkbox" v-model="axisLock.z" title="锁定 Z" />
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="rightGroups.transformOpen" class="panelx-editor3d-scale-editor">
-          <div class="panelx-editor3d-pos-row">
-            <span class="panelx-editor3d-size-label">统一缩放</span>
-            <div class="panelx-editor3d-size-inputs">
-              <label>
-                S
-                <input
-                  v-model.number="selectedScaleUniform"
-                  type="number"
-                  step="any"
-                  min="0.01"
-                  @change="onScaleUniformChange"
-                />
-              </label>
-            </div>
-          </div>
-          <div class="panelx-editor3d-pos-row">
-            <span class="panelx-editor3d-size-label">缩放 Z/Y/X</span>
-            <div class="panelx-editor3d-size-inputs">
-              <label>
-                Z
-                <input
-                  v-model.number="selectedScale.z"
-                  type="number"
-                  step="any"
-                  min="0.01"
-                  @change="onScaleAxisChange('z')"
-                />
-              </label>
-              <label>
-                Y
-                <input
-                  v-model.number="selectedScale.y"
-                  type="number"
-                  step="any"
-                  min="0.01"
-                  @change="onScaleAxisChange('y')"
-                />
-              </label>
-              <label>
-                X
-                <input
-                  v-model.number="selectedScale.x"
-                  type="number"
-                  step="any"
-                  min="0.01"
-                  @change="onScaleAxisChange('x')"
-                />
-              </label>
-            </div>
-          </div>
-
-          <div class="panelx-editor3d-pos-row">
-            <span class="panelx-editor3d-size-label">旋转 (度)</span>
-            <div class="panelx-editor3d-size-inputs">
-              <label>
-                X
-                <input
-                  v-model.number="selectedRotation.x"
-                  type="number"
-                  step="any"
-                  @change="onRotationAxisChange('x')"
-                />
-              </label>
-              <label>
-                Y
-                <input
-                  v-model.number="selectedRotation.y"
-                  type="number"
-                  step="any"
-                  @change="onRotationAxisChange('y')"
-                />
-              </label>
-              <label>
-                Z
-                <input
-                  v-model.number="selectedRotation.z"
-                  type="number"
-                  step="any"
-                  @change="onRotationAxisChange('z')"
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- 遮罩：包围盒透明遮罩（颜色/透明度），选中时临时覆盖为 75% -->
-        <div class="panelx-editor3d-mask">
-          <button
-            type="button"
-            class="panelx-editor3d-group-header panelx-editor3d-section"
-            @click="rightGroups.maskOpen = !rightGroups.maskOpen"
-          >
-            <span>遮罩</span>
-            <span class="panelx-editor3d-group-toggle">{{ rightGroups.maskOpen ? '−' : '+' }}</span>
-          </button>
-          <div v-if="rightGroups.maskOpen" class="panelx-editor3d-commands-body">
-            <div class="panelx-editor3d-pos-row">
-              <span class="panelx-editor3d-size-label">颜色</span>
-              <div class="panelx-editor3d-size-inputs">
-                <input
-                  :value="getMaskSettings(selectedWidgetId!).color"
-                  type="color"
-                  class="panelx-editor3d-color-picker"
-                  title="选择遮罩颜色"
-                  @input="onMaskColorInput(($event.target as HTMLInputElement).value)"
-                />
-                <input
-                  :value="getMaskSettings(selectedWidgetId!).color"
-                  type="text"
-                  class="panelx-editor3d-color-hex"
-                  placeholder="#38bdf8"
-                  @input="onMaskColorInput(($event.target as HTMLInputElement).value)"
-                />
-              </div>
-            </div>
-            <div class="panelx-editor3d-pos-row">
-              <span class="panelx-editor3d-size-label">透明度</span>
-              <div class="panelx-editor3d-size-inputs">
-                <label>
-                  %
-                  <input
-                    :value="Math.round(getMaskSettings(selectedWidgetId!).opacity * 100)"
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="100"
-                    @input="onMaskOpacityInput(Number(($event.target as HTMLInputElement).value))"
-                  />
-                </label>
-                <span class="panelx-editor3d-size-value">选中时固定 75%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panelx-editor3d-props-editor">
-          <button
-            type="button"
-            class="panelx-editor3d-group-header panelx-editor3d-section"
-            @click="rightGroups.propsOpen = !rightGroups.propsOpen"
-          >
-            <span>属性 (Props)</span>
-            <span class="panelx-editor3d-group-toggle">{{ rightGroups.propsOpen ? '−' : '+' }}</span>
-          </button>
-          <template v-if="rightGroups.propsOpen">
-            <div v-if="selectedWidgetSupportedProps.length" class="panelx-editor3d-props-list">
-              <div
-                v-for="prop in selectedWidgetSupportedProps"
-                :key="prop.key"
-                class="panelx-editor3d-props-row"
-              >
-                <span class="panelx-editor3d-props-key">{{ prop.label ?? prop.key }}</span>
-                <select
-                  v-if="prop.enum?.length"
-                  :value="String(selectedWidgetCustomProps[prop.key] ?? '')"
-                  class="panelx-editor3d-props-value panelx-editor3d-props-select"
-                  @change="setCustomPropValue(prop.key, ($event.target as HTMLSelectElement).value)"
-                >
-                  <option value="">—</option>
-                  <option
-                    v-for="opt in prop.enum"
-                    :key="String(opt)"
-                    :value="String(opt)"
-                  >
-                    {{ opt }}
-                  </option>
-                </select>
-                <input
-                  v-else
-                  :value="selectedWidgetCustomProps[prop.key] ?? ''"
-                  type="text"
-                  class="panelx-editor3d-props-value"
-                  :placeholder="prop.key"
-                  @change="setCustomPropValue(prop.key, ($event.target as HTMLInputElement).value)"
-                  @keydown.enter="setCustomPropValue(prop.key, ($event.target as HTMLInputElement).value)"
-                />
-              </div>
-            </div>
-            <template v-if="customOnlyPropEntries.length">
-              <div class="panelx-editor3d-props-other-label">其他属性</div>
-              <div class="panelx-editor3d-props-list">
-                <div
-                  v-for="[key, val] in customOnlyPropEntries"
-                  :key="key"
-                  class="panelx-editor3d-props-row"
-                >
-                  <span class="panelx-editor3d-props-key">{{ key }}</span>
-                  <input
-                    :value="val"
-                    type="text"
-                    class="panelx-editor3d-props-value"
-                    @change="setCustomPropValue(key, ($event.target as HTMLInputElement).value)"
-                    @keydown.enter="setCustomPropValue(key, ($event.target as HTMLInputElement).value)"
-                  />
-                  <button
-                    type="button"
-                    class="panelx-editor3d-props-remove"
-                    title="删除"
-                    @click="removeCustomProp(key)"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            </template>
-            <div class="panelx-editor3d-props-add">
-              <input
-                v-model="newPropKey"
-                type="text"
-                class="panelx-editor3d-props-key-in"
-                placeholder="键名"
-              />
-              <input
-                v-model="newPropValue"
-                type="text"
-                class="panelx-editor3d-props-value-in"
-                placeholder="值"
-                @keydown.enter="addCustomProp"
-              />
-              <button type="button" class="panelx-editor3d-btn panelx-editor3d-props-add-btn" @click="addCustomProp">
-                添加
-              </button>
-            </div>
-          </template>
-        </div>
-
-        <!-- 命令：创建旋转任务并执行一次 -->
-        <div class="panelx-editor3d-commands">
-          <button
-            type="button"
-            class="panelx-editor3d-group-header panelx-editor3d-section"
-            @click="rightGroups.commandsOpen = !rightGroups.commandsOpen"
-          >
-            <span>命令</span>
-            <span class="panelx-editor3d-group-toggle">{{ rightGroups.commandsOpen ? '−' : '+' }}</span>
-          </button>
-          <div v-if="rightGroups.commandsOpen" class="panelx-editor3d-commands-body">
-            <div class="panelx-editor3d-pos-row">
-              <span class="panelx-editor3d-size-label">旋转到 (度)</span>
-              <div class="panelx-editor3d-size-inputs">
-                <label>
-                  X
-                  <input v-model.number="rotateCmd.x" type="number" step="any" />
-                </label>
-                <label>
-                  Y
-                  <input v-model.number="rotateCmd.y" type="number" step="any" />
-                </label>
-                <label>
-                  Z
-                  <input v-model.number="rotateCmd.z" type="number" step="any" />
-                </label>
-              </div>
-            </div>
-            <div class="panelx-editor3d-pos-row">
-              <span class="panelx-editor3d-size-label">旋转速度 (弧度/秒)</span>
-              <div class="panelx-editor3d-size-inputs">
-                <label>
-                  S
-                  <input v-model.number="rotateCmd.speed" type="number" step="any" min="0" />
-                </label>
-                <button type="button" class="panelx-editor3d-btn panelx-editor3d-btn-inline" @click="runRotateToOnce">
-                  执行一次
-                </button>
-              </div>
-            </div>
-
-            <div class="panelx-editor3d-pos-row">
-              <span class="panelx-editor3d-size-label">移动到</span>
-              <div class="panelx-editor3d-size-inputs">
-                <label>
-                  X
-                  <input v-model.number="moveCmd.x" type="number" step="any" />
-                </label>
-                <label>
-                  Y
-                  <input v-model.number="moveCmd.y" type="number" step="any" />
-                </label>
-                <label>
-                  Z
-                  <input v-model.number="moveCmd.z" type="number" step="any" />
-                </label>
-              </div>
-            </div>
-            <div class="panelx-editor3d-pos-row">
-              <span class="panelx-editor3d-size-label">移动速度 (单位/秒)</span>
-              <div class="panelx-editor3d-size-inputs">
-                <label>
-                  S
-                  <input v-model.number="moveCmd.speed" type="number" step="any" min="0" />
-                </label>
-                <button type="button" class="panelx-editor3d-btn panelx-editor3d-btn-inline" @click="runMoveToOnce">
-                  执行一次
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
-    </aside>
+    <RightSidebar
+      v-model:rightGroups="rightGroups"
+      v-model:selectedWidgetId="selectedWidgetId"
+      v-model:selectedWidgetName="selectedWidgetName"
+      v-model:selectedPosition="selectedPosition"
+      v-model:axisLock="axisLock"
+      v-model:selectedScaleUniform="selectedScaleUniform"
+      v-model:selectedScale="selectedScale"
+      v-model:selectedRotation="selectedRotation"
+      v-model:rotateCmd="rotateCmd"
+      v-model:moveCmd="moveCmd"
+      v-model:newPropKey="newPropKey"
+      v-model:newPropValue="newPropValue"
+      :selected-widget-supported-props="selectedWidgetSupportedProps"
+      :selected-widget-custom-props="selectedWidgetCustomProps"
+      :custom-only-prop-entries="customOnlyPropEntries as any"
+      :on-position-input-change="onPositionInputChange"
+      :on-scale-uniform-change="onScaleUniformChange"
+      :on-scale-axis-change="onScaleAxisChange"
+      :on-rotation-axis-change="onRotationAxisChange"
+      :get-mask-settings="getMaskSettings"
+      :on-mask-color-input="onMaskColorInput"
+      :on-mask-opacity-input="onMaskOpacityInput"
+      :set-custom-prop-value="setCustomPropValue as any"
+      :remove-custom-prop="removeCustomProp"
+      :add-custom-prop="addCustomProp"
+      :run-rotate-to-once="runRotateToOnce"
+      :run-move-to-once="runMoveToOnce"
+    />
 
     <!-- 放下后弹出的位置/缩放对话框 -->
     <Teleport to="body">
@@ -625,6 +103,9 @@
 
 <script setup lang="ts">
 import { reactive, computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import LeftSidebar from './editor3d/ui/LeftSidebar.vue'
+import MainArea from './editor3d/ui/MainArea.vue'
+import RightSidebar from './editor3d/ui/RightSidebar.vue'
 import { modelRegistry, setup3D } from '../framework'
 import type { DashboardConfig, WidgetConfig3D } from '../types/dashboard'
 import type { ModelTypeDefinition, PropDefinition } from '../framework'
@@ -638,6 +119,8 @@ import type { Model } from '../framework'
 import { ModelLoadable } from '../framework/model/ModelLoadable'
 import { SimpleModel } from '../framework/model/SimpleModel'
 import { designInputToWorldXZ, worldXZToDesignInput } from '../utils/coord3d'
+import { useModelTypesByGroup } from './editor3d/useModelTypesByGroup'
+import { useViewportLayout } from './editor3d/useViewportLayout'
 
 /** 预设模型列表（由 examples 等注入），在侧栏「可用模型」中展示 */
 defineProps<{
@@ -682,23 +165,20 @@ const sceneLights = reactive<{ ambient: number; hemisphere: number; point: numbe
 
 /** 3D 编辑区背景色（主区域），可用色彩选择器配置 */
 const editorBackgroundColor = ref('#0f172a')
-/** 父容器尺寸（跟随 dashboard 设计尺寸，只控制宽高比，不影响 3D 世界坐标系） */
-const worldOuterStyle = computed(() => {
-  const w = Math.max(1, Number(designSize.width) || 1920)
-  const h = Math.max(1, Number(designSize.height) || 1080)
-  return {
-    aspectRatio: `${w} / ${h}`,
-    maxWidth: '100%',
-    maxHeight: '100%'
-  }
-})
 
-const dpr = computed(() => Number(window.devicePixelRatio) || 1)
-const viewportSize = computed(() => worldRef.value?.getSize() ?? { x: 0, y: 0 })
-const canvasPixelSize = computed(() => ({
-  x: Math.max(0, Math.round(viewportSize.value.x * dpr.value)),
-  y: Math.max(0, Math.round(viewportSize.value.y * dpr.value))
-}))
+/** 3D world（由 setup3D 初始化；这里用最小接口以避免与具体实现强耦合） */
+type WorldLike = {
+  getSize: () => { x: number; y: number }
+  destroy?: () => void
+  notifyResize?: () => void
+  getRendererDom?: () => HTMLCanvasElement
+  statsStyle?: (style: number) => void
+  sceneTo?: (...args: any[]) => void
+}
+const worldRef = ref<WorldLike | null>(null)
+
+/** 父容器尺寸（跟随 dashboard 设计尺寸，只控制宽高比，不影响 3D 世界坐标系） */
+const { dpr, viewportSize, canvasPixelSize, worldOuterStyle } = useViewportLayout(designSize, worldRef)
 
 /**
  * 3D Editor 坐标系（用于 XZ 转换）：
@@ -774,38 +254,8 @@ interface DragPayloadPreset {
 }
 const DRAG_TYPE = 'application/panelx-3d-model'
 
-/** 模型类型分组：顺序与展示用标签（编辑器左侧按此分组展示） */
-const MODEL_GROUP_ORDER = ['loadable', 'example', 'decoration', 'equipment', 'infrastructure'] as const
-const MODEL_GROUP_LABELS: Record<string, string> = {
-  loadable: '可加载模型',
-  example: '二次开发模型',
-  decoration: '装饰物',
-  equipment: '设备',
-  infrastructure: '基建'
-}
-const MODEL_GROUP_OTHER = '其他'
-
 /** 按分组整理后的模型类型列表，用于左侧「模型类型」分组展示 */
-const modelTypesByGroup = computed(() => {
-  const all = modelRegistry.getTypes()
-  const map = new Map<string, ModelTypeDefinition[]>()
-  for (const def of all) {
-    // category 优先：examples 本地/二开模型单独分组（无需每个模型再手动改 group）
-    const categoryKey = def.category === 'example' ? 'example' : undefined
-    const keyRaw = categoryKey ?? def.group
-    const key = (keyRaw && MODEL_GROUP_ORDER.includes(keyRaw as (typeof MODEL_GROUP_ORDER)[number])) ? keyRaw! : MODEL_GROUP_OTHER
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(def)
-  }
-  const result: { groupKey: string; groupLabel: string; items: ModelTypeDefinition[] }[] = []
-  for (const key of MODEL_GROUP_ORDER) {
-    const items = map.get(key)
-    if (items?.length) result.push({ groupKey: key, groupLabel: MODEL_GROUP_LABELS[key] ?? key, items })
-  }
-  const other = map.get(MODEL_GROUP_OTHER)
-  if (other?.length) result.push({ groupKey: MODEL_GROUP_OTHER, groupLabel: MODEL_GROUP_OTHER, items: other })
-  return result
-})
+const modelTypesByGroup = useModelTypesByGroup(modelRegistry)
 
 /** 3D 编辑器当前配置：符合 DashboardConfig，widgets3D 符合 WidgetConfig3D 格式 */
 const config = reactive<DashboardConfig>({
@@ -818,7 +268,7 @@ const widgets3D = computed(() => config.widgets3D ?? [])
 
 /** 3D world/loader/storyboard（由 setup3D 初始化） */
 const loaderRef = ref<Loader | null>(null)
-const worldRef = ref<World | null>(null)
+// worldRef 已提前声明（用于布局计算）
 const storyboardRef = ref<StoryBoard | null>(null)
 const addedModelNames = new Set<string>()
 const pendingTransforms = new Map<
@@ -1588,7 +1038,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   try {
-    worldRef.value?.destroy()
+    worldRef.value?.destroy?.()
   } catch {
     // ignore
   }
@@ -1631,7 +1081,7 @@ function exportConfig() {
 }
 </script>
 
-<style scoped>
+<style>
 .panelx-editor3d {
   display: flex;
   width: 100%;
