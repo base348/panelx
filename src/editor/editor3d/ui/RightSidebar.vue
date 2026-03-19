@@ -115,6 +115,22 @@
           <span class="panelx-editor3d-group-toggle">{{ rightGroups.maskOpen ? '−' : '+' }}</span>
         </button>
         <div v-if="rightGroups.maskOpen" class="panelx-editor3d-commands-body">
+            <div class="panelx-editor3d-pos-row">
+              <span class="panelx-editor3d-size-label">半径</span>
+              <div class="panelx-editor3d-size-inputs">
+                <label>
+                  R
+                  <input
+                    :value="getMaskSettings(selectedWidgetId!).radiusWorld"
+                    type="number"
+                    step="any"
+                    min="0.001"
+                    @input="onMaskRadiusInput(Number(($event.target as HTMLInputElement).value))"
+                  />
+                </label>
+                <span class="panelx-editor3d-size-value">World 单位</span>
+              </div>
+            </div>
           <div class="panelx-editor3d-pos-row">
             <span class="panelx-editor3d-size-label">颜色</span>
             <div class="panelx-editor3d-size-inputs">
@@ -304,9 +320,10 @@ defineProps({
   onScaleUniformChange: { type: Function as PropType<() => void>, required: true },
   onScaleAxisChange: { type: Function as PropType<(axis: 'x' | 'y' | 'z') => void>, required: true },
   onRotationAxisChange: { type: Function as PropType<(axis: 'x' | 'y' | 'z') => void>, required: true },
-  getMaskSettings: { type: Function as PropType<(id: string) => { color: string; opacity: number }>, required: true },
+  getMaskSettings: { type: Function as PropType<(id: string) => { color: string; opacity: number; radiusWorld: number }>, required: true },
   onMaskColorInput: { type: Function as PropType<(v: string) => void>, required: true },
   onMaskOpacityInput: { type: Function as PropType<(v: number) => void>, required: true },
+  onMaskRadiusInput: { type: Function as PropType<(v: number) => void>, required: true },
   setCustomPropValue: { type: Function as PropType<(key: string, v: string) => void>, required: true },
   removeCustomProp: { type: Function as PropType<(key: string) => void>, required: true },
   addCustomProp: { type: Function as PropType<() => void>, required: true },

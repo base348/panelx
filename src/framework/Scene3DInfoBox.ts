@@ -1,11 +1,10 @@
 import { CSS3DObject } from 'three/examples/jsm/Addons.js'
 import type {
   Scene3DInfoBoxConfig,
-  Scene3DInfoBoxColorPreset,
-  Scene3DInfoBoxStatusType
+  Scene3DInfoBoxColorPreset
 } from '../types/dashboard'
 
-type ThemeColors = { bg: string; border: string; glow: string; statusColor: string }
+type ThemeColors = { bg: string; border: string; glow: string; accentColor: string }
 
 function ensureInfoBoxFxStyles(): void {
   if (typeof document === 'undefined') return
@@ -47,9 +46,12 @@ function ensureInfoBoxFxStyles(): void {
 }
 .panelx-scene3d-infobox .panelx-infobox-fx-glitch {
   opacity: 0;
-  background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(120,200,255,0.20) 50%, rgba(0,0,0,0) 100%);
-  filter: saturate(1.2);
-  animation: panelxGlitch 2.4s steps(2) infinite;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(120,200,255,0.32) 35%, rgba(0,0,0,0) 100%),
+    linear-gradient(90deg, rgba(255,70,70,0.18) 0%, rgba(0,0,0,0) 55%),
+    linear-gradient(90deg, rgba(80,200,255,0.20) 45%, rgba(0,0,0,0) 100%);
+  filter: saturate(1.45) contrast(1.12);
+  animation: panelxGlitch 1.35s steps(2) infinite;
 }
 .panelx-scene3d-infobox .panelx-infobox-fx-glowSweep {
   position: absolute;
@@ -71,7 +73,7 @@ function ensureInfoBoxFxStyles(): void {
 .panelx-scene3d-infobox[data-fx="all"] .panelx-infobox-fx-noise { opacity: 0.10; }
 
 .panelx-scene3d-infobox[data-fx="glitch"] .panelx-infobox-fx-glitch,
-.panelx-scene3d-infobox[data-fx="all"] .panelx-infobox-fx-glitch { opacity: 0.20; }
+.panelx-scene3d-infobox[data-fx="all"] .panelx-infobox-fx-glitch { opacity: 0.34; }
 
 @keyframes panelxScanlines {
   0% { transform: translateY(0); }
@@ -91,12 +93,18 @@ function ensureInfoBoxFxStyles(): void {
 }
 @keyframes panelxGlitch {
   0% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
-  10% { transform: translate(-1px, 0px) skewX(-2deg); clip-path: inset(10% 0 70% 0); }
-  12% { transform: translate(2px, -1px) skewX(2deg); clip-path: inset(60% 0 12% 0); }
+  6% { transform: translate(-2px, 0px) skewX(-4deg); clip-path: inset(8% 0 70% 0); }
+  9% { transform: translate(3px, -1px) skewX(3deg); clip-path: inset(58% 0 14% 0); }
+  12% { transform: translate(-1px, 1px) skewX(-2deg); clip-path: inset(35% 0 38% 0); }
   15% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
-  60% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
-  62% { transform: translate(1px, 0px) skewX(1deg); clip-path: inset(30% 0 45% 0); }
-  65% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
+  38% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
+  42% { transform: translate(2px, 0px) skewX(2deg); clip-path: inset(22% 0 52% 0); }
+  45% { transform: translate(-3px, 1px) skewX(-3deg); clip-path: inset(66% 0 8% 0); }
+  49% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
+  72% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
+  76% { transform: translate(1px, -1px) skewX(2deg); clip-path: inset(28% 0 44% 0); }
+  80% { transform: translate(-2px, 0px) skewX(-2deg); clip-path: inset(50% 0 18% 0); }
+  84% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
   100% { transform: translate(0,0) skewX(0deg); clip-path: inset(0 0 0 0); }
 }
 `
@@ -109,45 +117,37 @@ export const INFO_BOX_PRESET_THEMES: Record<Scene3DInfoBoxColorPreset, ThemeColo
     bg: 'rgba(20, 60, 100, 0.88)',
     border: 'rgba(0, 212, 255, 0.75)',
     glow: '0 0 18px rgba(0, 180, 220, 0.45), inset 0 0 30px rgba(0,0,0,0.2)',
-    statusColor: 'rgb(120, 200, 255)'
+    accentColor: 'rgb(120, 200, 255)'
   },
   success: {
     bg: 'rgba(20, 80, 60, 0.88)',
     border: 'rgba(80, 255, 180, 0.75)',
     glow: '0 0 16px rgba(60, 220, 160, 0.45), inset 0 0 30px rgba(0,0,0,0.2)',
-    statusColor: 'rgb(160, 255, 200)'
+    accentColor: 'rgb(160, 255, 200)'
   },
   warning: {
     bg: 'rgba(140, 100, 20, 0.88)',
     border: 'rgba(255, 200, 80, 0.9)',
     glow: '0 0 20px rgba(255, 180, 60, 0.5), inset 0 0 30px rgba(0,0,0,0.2)',
-    statusColor: 'rgb(255, 220, 120)'
+    accentColor: 'rgb(255, 220, 120)'
   },
   error: {
     bg: 'rgba(140, 30, 30, 0.88)',
     border: 'rgba(255, 80, 80, 0.9)',
     glow: '0 0 20px rgba(255, 60, 60, 0.6), inset 0 0 30px rgba(0,0,0,0.2)',
-    statusColor: 'rgb(255, 120, 120)'
+    accentColor: 'rgb(255, 120, 120)'
   }
 }
 
-/** statusType 到 colorPreset 的兼容映射（normal=绿、warning=黄、fault=红） */
-const STATUS_TO_PRESET: Record<Scene3DInfoBoxStatusType, Scene3DInfoBoxColorPreset> = {
-  fault: 'error',
-  normal: 'success',
-  warning: 'warning'
-}
-
 function resolveTheme(config: Scene3DInfoBoxConfig): ThemeColors {
-  const preset: Scene3DInfoBoxColorPreset =
-    config.colorPreset ?? STATUS_TO_PRESET[config.statusType ?? 'fault']
+  const preset: Scene3DInfoBoxColorPreset = config.colorPreset ?? 'info'
   const base = INFO_BOX_PRESET_THEMES[preset]
   const over = config.color ?? {}
   return {
     bg: over.bg ?? base.bg,
     border: over.border ?? base.border,
     glow: over.glow ?? base.glow,
-    statusColor: over.statusColor ?? base.statusColor
+    accentColor: over.accentColor ?? base.accentColor
   }
 }
 
@@ -196,13 +196,16 @@ export function createScene3DInfoBox(config: Scene3DInfoBoxConfig): CSS3DObject 
     <div class="panelx-infobox-fx-noise"></div>
     <div class="panelx-infobox-fx-glitch"></div>
     <div style="position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${theme.border};"></div>
-    <div style="font-weight: 700; font-size: 14px; margin-bottom: 10px; color: rgba(255,255,255,0.95); letter-spacing: 0.02em;">${escapeHtml(config.title)}</div>
-    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-      <span style="color: rgba(255,255,255,0.85);">📋 设备编号 ${escapeHtml(config.equipmentId)}</span>
-      <span style="color: ${theme.statusColor}; font-weight: 600;">⚠ ${escapeHtml(config.status)}</span>
-    </div>
-    ${config.runningTime ? `<div style="margin-bottom: 6px; color: rgba(255,255,255,0.85);">⏱ 设备运行时长 ${escapeHtml(config.runningTime)}</div>` : ''}
-    ${config.message ? `<div style="margin-top: 8px; padding: 6px 8px; background: rgba(0,0,0,0.25); border-radius: 4px; color: ${theme.statusColor}; font-size: 11px;">▲ 设备异常信息 ${escapeHtml(config.message)}</div>` : ''}
+    <div style="font-weight: 700; font-size: 14px; margin-bottom: 6px; color: rgba(255,255,255,0.95); letter-spacing: 0.02em;">${escapeHtml(config.title)}</div>
+    ${config.subtitle ? `<div style="margin-bottom: 8px; color: rgba(255,255,255,0.75); font-size: 11px;">${escapeHtml(config.subtitle)}</div>` : ''}
+    ${(config.metaLeft || config.metaRight) ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 6px; gap: 10px;">
+        <span style="color: rgba(255,255,255,0.85);">${escapeHtml(config.metaLeft ?? '')}</span>
+        <span style="color: ${theme.accentColor}; font-weight: 600;">${escapeHtml(config.metaRight ?? '')}</span>
+      </div>
+    ` : ''}
+    ${config.content ? `<div style="margin-top: 2px; color: rgba(255,255,255,0.9);">${toMultiLineHtml(config.content)}</div>` : ''}
+    ${config.note ? `<div style="margin-top: 8px; padding: 6px 8px; background: rgba(0,0,0,0.25); border-radius: 4px; color: ${theme.accentColor}; font-size: 11px;">${escapeHtml(config.note)}</div>` : ''}
   `
 
   const css3d = new CSS3DObject(wrap)
@@ -215,4 +218,18 @@ function escapeHtml(s: string): string {
   const div = document.createElement('div')
   div.textContent = s
   return div.innerHTML
+}
+
+/**
+ * Editor 中用单个字段输入多行正文：
+ * - 使用 "|" 作为分隔符，例如 "line1|line2|line3"
+ * - 兼容直接输入换行
+ */
+function toMultiLineHtml(s: string): string {
+  return s
+    .split(/\r?\n|\|/g)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => escapeHtml(line))
+    .join('<br/>')
 }

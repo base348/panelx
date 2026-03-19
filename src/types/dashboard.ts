@@ -139,9 +139,6 @@ export interface Model3DItemConfig {
   scale?: number
 }
 
-/** 3D 场景内信息框状态类型（影响样式：红=故障、黄=预警、绿=正常），已推荐用 colorPreset */
-export type Scene3DInfoBoxStatusType = 'normal' | 'warning' | 'fault'
-
 /** 信息框预制颜色：info=蓝/青、success=绿、warning=黄、error=红 */
 export type Scene3DInfoBoxColorPreset = 'info' | 'success' | 'warning' | 'error'
 
@@ -153,8 +150,8 @@ export interface Scene3DInfoBoxColorOverride {
   border?: string
   /** 外发光 box-shadow，如 0 0 20px rgba(0,212,255,0.5) */
   glow?: string
-  /** 状态/高亮文字颜色，如 rgb(120, 200, 255) */
-  statusColor?: string
+  /** 强调文字颜色，如 rgb(120, 200, 255) */
+  accentColor?: string
 }
 
 /** 3D 场景内悬浮信息框配置（绑定到模型或指定坐标，科技感红/黄/蓝框） */
@@ -169,22 +166,22 @@ export interface Scene3DInfoBoxConfig {
   offset?: [number, number, number]
   /** 旋转欧拉角 [x, y, z] 弧度，不设则为 [0, 0, 0] */
   rotation?: [number, number, number]
-  /** 设备类型/标题，如「光刻机」 */
+  /** 标题 */
   title: string
-  /** 设备编号，如 GKJ015 */
-  equipmentId: string
-  /** 状态文案，如「正常」「故障」「预警」 */
-  status: string
-  /** 状态类型（兼容旧配置，与 colorPreset 映射：fault→error, normal→success 绿, warning→warning） */
-  statusType?: Scene3DInfoBoxStatusType
-  /** 预制颜色：info / success / warning / error，优先于 statusType */
+  /** 副标题 */
+  subtitle?: string
+  /** 顶部元信息左侧 */
+  metaLeft?: string
+  /** 顶部元信息右侧 */
+  metaRight?: string
+  /** 主体内容 */
+  content?: string
+  /** 底部备注 */
+  note?: string
+  /** 预制颜色：info / success / warning / error */
   colorPreset?: Scene3DInfoBoxColorPreset
   /** 自定义颜色，覆盖预制中的对应项 */
   color?: Scene3DInfoBoxColorOverride
-  /** 运行时长，如 3.5 h */
-  runningTime?: string
-  /** 异常信息（故障时显示） */
-  message?: string
   /** 屏幕特效：none/scanlines/noise/glitch/all */
   fx?: 'none' | 'scanlines' | 'noise' | 'glitch' | 'all'
   /** 是否显示 */

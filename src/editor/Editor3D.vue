@@ -72,6 +72,7 @@
       :get-mask-settings="getMaskSettings"
       :on-mask-color-input="onMaskColorInput"
       :on-mask-opacity-input="onMaskOpacityInput"
+      :on-mask-radius-input="onMaskRadiusInput"
       :set-custom-prop-value="setCustomPropValue as any"
       :remove-custom-prop="removeCustomProp"
       :add-custom-prop="addCustomProp"
@@ -338,6 +339,7 @@ const CUSTOM_PROPS_KEY = 'custom'
 
 const MASK_COLOR_KEY = 'maskColor'
 const MASK_OPACITY_KEY = 'maskOpacity'
+const MASK_RADIUS_KEY = 'maskRadius'
 const SELECTED_MASK_OPACITY = 0.75
 const UNSELECTED_OPACITY_MULTIPLIER = 0.5
 
@@ -353,16 +355,18 @@ function getWidgetById(id: string): WidgetConfig3D | undefined {
   return config.widgets3D?.find((w) => w.id === id)
 }
 
-function getMaskSettings(id: string): { color: string; opacity: number } {
+function getMaskSettings(id: string): { color: string; opacity: number; radiusWorld: number } {
   const w = getWidgetById(id)
   const custom = (w?.props as Record<string, unknown> | undefined)?.[CUSTOM_PROPS_KEY] as Record<string, unknown> | undefined
   const color = toHexColorString(custom?.[MASK_COLOR_KEY], '#38bdf8')
   const op = Number(custom?.[MASK_OPACITY_KEY])
   const opacity = Number.isFinite(op) ? Math.min(1, Math.max(0, op)) : 1
-  return { color, opacity }
+  const r = Number(custom?.[MASK_RADIUS_KEY])
+  const radiusWorld = Number.isFinite(r) && r > 0 ? r : 3
+  return { color, opacity, radiusWorld }
 }
 
-function setMaskSettingsToCustom(id: string, next: { color?: string; opacity?: number }): void {
+function setMaskSettingsToCustom(id: string, next: { color?: string; opacity?: number; radiusWorld?: number }): void {
   const w = getWidgetById(id)
   if (!w) return
   if (!w.props) w.props = {}
@@ -371,14 +375,16 @@ function setMaskSettingsToCustom(id: string, next: { color?: string; opacity?: n
   const custom = props[CUSTOM_PROPS_KEY] as Record<string, unknown>
   if (next.color != null) custom[MASK_COLOR_KEY] = toHexColorString(next.color)
   if (next.opacity != null && Number.isFinite(next.opacity)) custom[MASK_OPACITY_KEY] = Math.min(1, Math.max(0, next.opacity))
+  if (next.radiusWorld != null && Number.isFinite(next.radiusWorld) && next.radiusWorld > 0) custom[MASK_RADIUS_KEY] = next.radiusWorld
 }
 
 function applyMaskToModel(id: string, opts: { selected: boolean }): void {
   const sb = storyboardRef.value as BaseStoryBoard | null
   const model = sb?.getModelByName(id)
   if (!model) return
-  const { color, opacity } = getMaskSettings(id)
+  const { color, opacity, radiusWorld } = getMaskSettings(id)
   model.setMaskColor(color)
+  model.setMaskRadiusWorld(radiusWorld)
   model.setMaskVisible(opts.selected)
   model.setMaskOpacity(opts.selected ? SELECTED_MASK_OPACITY : opacity * UNSELECTED_OPACITY_MULTIPLIER)
   model.refreshMask()
@@ -405,6 +411,15 @@ function onMaskOpacityInput(percent: number): void {
   const p = Number(percent)
   const opacity = Number.isFinite(p) ? Math.min(1, Math.max(0, p / 100)) : 1
   setMaskSettingsToCustom(id, { opacity })
+  applyMaskToModel(id, { selected: true })
+}
+
+function onMaskRadiusInput(radiusWorld: number): void {
+  const id = selectedWidgetId.value
+  if (!id) return
+  const r = Number(radiusWorld)
+  if (!Number.isFinite(r) || r <= 0) return
+  setMaskSettingsToCustom(id, { radiusWorld: r })
   applyMaskToModel(id, { selected: true })
 }
 
@@ -592,17 +607,16 @@ async function createRobotDemoScene(): Promise<void> {
   model.setAutoRotateSpeed(degToRad(30))
   model.setAutoRotateEnabled(true)
 
-  const base: Omit<Scene3DInfoBoxConfig, 'id' | 'title' | 'equipmentId' | 'status'> = {
+  const base: Omit<Scene3DInfoBoxConfig, 'id' | 'title'> = {
     visible: true,
-    statusType: 'normal',
     colorPreset: 'info',
-    runningTime: '12.3 h'
+    subtitle: 'ROBOT STATUS PANEL'
   }
   const configs: Scene3DInfoBoxConfig[] = [
-    { ...base, id: 'demo-box-1', title: 'Robot / Telemetry', equipmentId: 'RB-001', status: 'ONLINE', message: 'Link stable · 0.8ms' },
-    { ...base, id: 'demo-box-2', title: 'Power Core', equipmentId: 'PWR-7A', status: 'OK', message: 'Battery 87% · Temp 36℃', colorPreset: 'success' },
-    { ...base, id: 'demo-box-3', title: 'Navigation', equipmentId: 'NAV-3', status: 'OK', message: 'IMU locked · Map synced', colorPreset: 'info' },
-    { ...base, id: 'demo-box-4', title: 'Safety', equipmentId: 'SAFE-2', status: 'WARN', statusType: 'warning', message: 'Proximity alert: 1.2m', colorPreset: 'warning' }
+    { ...base, id: 'demo-box-1', title: 'Robot / Telemetry', metaLeft: 'ID: RB-001', metaRight: 'ONLINE', note: 'Link stable · 0.8ms' },
+    { ...base, id: 'demo-box-2', title: 'Power Core', metaLeft: 'ID: PWR-7A', metaRight: 'OK', note: 'Battery 87% · Temp 36℃', colorPreset: 'success' },
+    { ...base, id: 'demo-box-3', title: 'Navigation', metaLeft: 'ID: NAV-3', metaRight: 'OK', note: 'IMU locked · Map synced', colorPreset: 'info' },
+    { ...base, id: 'demo-box-4', title: 'Safety', metaLeft: 'ID: SAFE-2', metaRight: 'WARN', note: 'Proximity alert: 1.2m', colorPreset: 'warning' }
   ]
   const offsets: Array<[number, number, number]> = [
     [2.2, 1.4, 0],
@@ -803,13 +817,13 @@ function confirmDropDialog() {
   if (w.props!.typeId === 'info-box') {
     ;(w.props as Record<string, unknown>)[CUSTOM_PROPS_KEY] = {
       title: 'Robot / Telemetry',
-      equipmentId: 'RB-001',
-      status: 'ONLINE',
-      statusType: 'normal',
+      subtitle: 'ROBOT STATUS PANEL',
+      metaLeft: 'ID: RB-001',
+      metaRight: 'ONLINE',
       colorPreset: 'info',
       fx: 'scanlines',
-      runningTime: '12.3 h',
-      message: 'Link stable · 0.8ms'
+      content: 'General purpose information content.',
+      note: 'Link stable · 0.8ms'
     }
     // CSS3D 默认有 0.01 scale；这里默认值用 1 即可
     w.props!.scale = w.props!.scale ?? 1

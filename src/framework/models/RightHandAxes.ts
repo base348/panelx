@@ -1,13 +1,18 @@
 import {
-  AxesHelper,
   BufferGeometry,
   CanvasTexture,
   Color,
+  ConeGeometry,
+  CylinderGeometry,
   Line,
   LineBasicMaterial,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
   Scene,
   Sprite,
   SpriteMaterial,
+  Quaternion,
   Vector3
 } from 'three'
 import { Model } from '../model/Model'
@@ -28,18 +33,24 @@ export class RightHandAxes extends Model {
 
     const scene = new Scene()
 
-    const axesLength = 5
-    const axes = new AxesHelper(axesLength)
-    scene.add(axes)
+    // 缩短 + 加粗 + 带箭头：用 Cylinder（轴杆）+ Cone（箭头）
+    const axesLength = 3
+    const headLength = axesLength * 0.18
+    const shaftRadius = 0.06
+    const headRadius = shaftRadius * 1.8
 
-    const pointerLength = axesLength * 1.1
-    scene.add(this.createAxisPointer(new Color(0xff0000), new Vector3(0, 0, 0), new Vector3(pointerLength, 0, 0))) // X
-    scene.add(this.createAxisPointer(new Color(0x00ff00), new Vector3(0, 0, 0), new Vector3(0, pointerLength, 0))) // Y
-    scene.add(this.createAxisPointer(new Color(0x0088ff), new Vector3(0, 0, 0), new Vector3(0, 0, pointerLength))) // Z
+    const xColor = new Color(0xff0000)
+    const yColor = new Color(0x00ff00)
+    const zColor = new Color(0x0088ff)
 
-    scene.add(this.createAxisLabel('X', new Color(0xff0000), new Vector3(pointerLength + 0.4, 0, 0)))
-    scene.add(this.createAxisLabel('Y', new Color(0x00ff00), new Vector3(0, pointerLength + 0.4, 0)))
-    scene.add(this.createAxisLabel('Z', new Color(0x0088ff), new Vector3(0, 0, pointerLength + 0.4)))
+    scene.add(this.createAxisArrow(xColor, new Vector3(1, 0, 0), axesLength, shaftRadius, headLength, headRadius)) // X
+    scene.add(this.createAxisArrow(yColor, new Vector3(0, 1, 0), axesLength, shaftRadius, headLength, headRadius)) // Y
+    scene.add(this.createAxisArrow(zColor, new Vector3(0, 0, 1), axesLength, shaftRadius, headLength, headRadius)) // Z
+
+    const labelEnd = axesLength + headLength + 0.25
+    scene.add(this.createAxisLabel('X', xColor, new Vector3(labelEnd, 0, 0)))
+    scene.add(this.createAxisLabel('Y', yColor, new Vector3(0, labelEnd, 0)))
+    scene.add(this.createAxisLabel('Z', zColor, new Vector3(0, 0, labelEnd)))
 
     const scaleLen = 2
     const scaleY = -0.1
@@ -55,10 +66,38 @@ export class RightHandAxes extends Model {
     this.setScene(scene)
   }
 
-  private createAxisPointer(color: Color, from: Vector3, to: Vector3): Line {
-    const geom = new BufferGeometry().setFromPoints([from, to])
-    const mat = new LineBasicMaterial({ color })
-    return new Line(geom, mat)
+  private createAxisArrow(
+    color: Color,
+    dir: Vector3,
+    shaftLength: number,
+    shaftRadius: number,
+    headLength: number,
+    headRadius: number
+  ): Object3D {
+    const d = dir.clone()
+    if (d.lengthSq() === 0) return new Object3D()
+    d.normalize()
+
+    // three 的 Cylinder/Cone 默认沿 Y 轴
+    const quat = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), d)
+
+    const group = new Object3D()
+
+    const shaftGeom = new CylinderGeometry(shaftRadius, shaftRadius, shaftLength, 8, 1)
+    const shaftMat = new MeshBasicMaterial({ color })
+    const shaft = new Mesh(shaftGeom, shaftMat)
+    shaft.applyQuaternion(quat)
+    shaft.position.copy(d).multiplyScalar(shaftLength / 2)
+    group.add(shaft)
+
+    const headGeom = new ConeGeometry(headRadius, headLength, 8, 1)
+    const headMat = new MeshBasicMaterial({ color })
+    const head = new Mesh(headGeom, headMat)
+    head.applyQuaternion(quat)
+    head.position.copy(d).multiplyScalar(shaftLength + headLength / 2)
+    group.add(head)
+
+    return group
   }
 
   private createAxisLabel(text: string, color: Color, position: Vector3): Sprite {

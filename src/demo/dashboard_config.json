@@ -28,8 +28,8 @@
         { "id": "ProductLine-8", "source": "/models/product-line.glb", "format": "gltf", "visible": true, "position": [5.25, 0.5, 0], "scale": 5 }
       ],
       "infoBoxes": [
-        { "id": "infobox-srm005", "modelId": "ProductLine-5", "offset": [0, 1.4, 0], "title": "#5机", "equipmentId": "SRM005", "status": "故障", "statusType": "fault", "runningTime": "3.5 h", "message": "当前设备故障,正在抢修中", "rotation": [0, 0.7853981633974483, 0] },
-        { "id": "infobox-srm004", "modelId": "ProductLine-4", "offset": [-4, 1.4, 0], "title": "#4机", "equipmentId": "SRM004", "status": "正常", "statusType": "normal", "runningTime": "12.0 h", "message": "当前设备完成工作", "rotation": [0, 0.7853981633974483, 0] }
+        { "id": "infobox-srm005", "modelId": "ProductLine-5", "offset": [0, 1.4, 0], "title": "#5机", "subtitle": "产线设备看板", "metaLeft": "设备: SRM005", "metaRight": "故障", "note": "当前设备故障,正在抢修中", "colorPreset": "error", "rotation": [0, 0.7853981633974483, 0] },
+        { "id": "infobox-srm004", "modelId": "ProductLine-4", "offset": [-4, 1.4, 0], "title": "#4机", "subtitle": "产线设备看板", "metaLeft": "设备: SRM004", "metaRight": "正常", "note": "当前设备完成工作", "colorPreset": "success", "rotation": [0, 0.7853981633974483, 0] }
       ]
     }
   },

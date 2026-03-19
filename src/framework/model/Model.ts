@@ -39,8 +39,8 @@ export class Model extends Object3D{
     private maskColor: number = 0x38bdf8
     /** 透明度：0~1，默认 1（100%） */
     private maskOpacity: number = 1
-    /** 遮罩半径（world 单位）。当前固定为 3 */
-    private static readonly MASK_RADIUS_WORLD = 3
+    /** 遮罩半径（world 单位）。默认 3，可在 editor 中配置 */
+    private maskRadiusWorld: number = 3
 
     /** 自旋转：开关 */
     private autoRotateEnabled: boolean = false
@@ -119,6 +119,14 @@ export class Model extends Object3D{
         return this.maskOpacity
     }
 
+    /** 设置遮罩半径（world 单位） */
+    setMaskRadiusWorld(radiusWorld: number): void {
+        const v = Number(radiusWorld)
+        if (!Number.isFinite(v) || v <= 0) return
+        this.maskRadiusWorld = v
+        if (this.maskMesh) this.refreshMask()
+    }
+
     /** 刷新遮罩尺寸/位置（按模型外接圆/球计算） */
     refreshMask(): void {
         if (!this.maskMesh || !this.maskMat) return
@@ -139,7 +147,7 @@ export class Model extends Object3D{
         box.getCenter(centerWorld)
 
         // 遮罩半径：按需求固定为 world 半径 3（不再随模型尺寸计算）
-        const radiusWorld = Math.max(0.001, Model.MASK_RADIUS_WORLD)
+        const radiusWorld = Math.max(0.001, this.maskRadiusWorld)
 
         // mask 是 root 的子节点，需要把 world 中心换算到 root 的本地坐标
         const centerLocal = centerWorld.clone()
