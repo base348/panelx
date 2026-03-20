@@ -15,9 +15,12 @@
     { "type": "panel", "label": "面板", "defaultSize": { "width": 360, "height": 200 }, "sampleImage": "" },
     { "type": "decoration", "label": "装饰", "defaultSize": { "width": 120, "height": 120 }, "sampleImage": "" },
     { "type": "deviceCard", "label": "设备卡片", "defaultSize": { "width": 320, "height": 280 }, "sampleImage": "" },
+    { "type": "parkScaleStats", "label": "园区规模统计", "defaultSize": { "width": 380, "height": 220 }, "sampleImage": "" },
     { "type": "progressList", "label": "进度列表", "defaultSize": { "width": 340, "height": 200 }, "sampleImage": "" },
     { "type": "bottomNav", "label": "底栏", "defaultSize": { "width": 1920, "height": 56 }, "sampleImage": "" },
-    { "type": "scaleRuler", "label": "比例尺", "defaultSize": { "width": 120, "height": 48 }, "sampleImage": "" }
+    { "type": "scaleRuler", "label": "比例尺", "defaultSize": { "width": 120, "height": 48 }, "sampleImage": "" },
+    { "type": "infoBox2D", "label": "2D信息框", "defaultSize": { "width": 320, "height": 160 }, "sampleImage": "" },
+    { "type": "leaderLines2D", "label": "2D引线", "defaultSize": { "width": 1920, "height": 1080 }, "sampleImage": "" }
   ],
   "_commentPropData": "widgetPropData.defaultParams: 按类型配置默认参数，拖入画布时优先使用。dashboardData: 预留，后续支持 dashboard 的 data。",
   "widgetPropData": {
@@ -43,6 +46,18 @@
       "panel": { "title": "面板" },
       "decoration": { "variant": "corner" },
       "deviceCard": { "items": [{ "label": "设备", "value": "-", "icon": "▸" }] },
+      "parkScaleStats": {
+        "title": "园区规模统计",
+        "subTitle": "STATISTICS OF PARK SCALE",
+        "ringLabel": "入驻率",
+        "rate": 82,
+        "items": [
+          { "label": "园区总面积", "value": 5790, "unit": "㎡", "percent": 78 },
+          { "label": "楼栋数量", "value": 4, "unit": "栋", "percent": 46 },
+          { "label": "办公区域", "value": 264, "unit": "个", "percent": 62 }
+        ],
+        "palette": ["#6FA8FF", "#3FE0D7", "#F5D36B"]
+      },
       "progressList": {
         "title": "进度",
         "subTitle": "PROGRESS",
@@ -50,7 +65,27 @@
       },
       "screenTitle": { "text": "大屏标题" },
       "topBar": { "datetime": "", "temperature": "25℃", "humidity": "50%rh", "background": "transparent" },
-      "bottomNav": { "items": [{ "label": "首页", "icon": "▸", "active": true }, { "label": "数据", "icon": "" }] }
+      "bottomNav": { "items": [{ "label": "首页", "icon": "▸", "active": true }, { "label": "数据", "icon": "" }] },
+      "infoBox2D": {
+        "title": "INFO BOX",
+        "subtitle": "SUBTITLE",
+        "metaLeft": "LEFT",
+        "metaRight": "RIGHT",
+        "content": "内容1|内容2",
+        "note": "Note",
+        "colorPreset": "cyan",
+        "fx": "scanlines"
+      },
+      "leaderLines2D": {
+        "origin": { "x": 50, "y": 50 },
+        "angleDeg": -45,
+        "length": 70,
+        "color": "#6EE7B7",
+        "width": 0.8,
+        "glowWidth": 2.6,
+        "fx": "glow",
+        "className": ""
+      }
     }
   }
 }

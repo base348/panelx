@@ -35,8 +35,14 @@
       <button type="button" class="panelx-editor-btn" @click="exportConfig">
         导出配置
       </button>
+      <button type="button" class="panelx-editor-btn" @click="previewDashboard">
+        预览
+      </button>
       <button type="button" class="panelx-editor-btn" @click="loadDemo">
         加载示例
+      </button>
+      <button type="button" class="panelx-editor-btn" @click="loadDemoBlank">
+        加载示例（新标签预览）
       </button>
       <button type="button" class="panelx-editor-btn" @click="loadWorkshopConfig">
         加载车间大屏配置
@@ -248,6 +254,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import type { DashboardConfig, WidgetConfig2D } from '../types/dashboard'
 import type { EditorConfig, RegisteredWidgetDef } from '../types/editor'
 import { setDebugFromConfig, isDebugEnabled } from '../utils/logManager'
@@ -255,6 +262,10 @@ import { getWidgetSampleImageUrl } from '../assets/editor-samples'
 import { getWidgetDefaultProps, getWidgetPropConfig } from '../widgets/widgetRegistry'
 import type { WidgetPropDef } from '../types/widgets'
 import SizeSettingsDialog from './SizeSettingsDialog.vue'
+
+const router = useRouter()
+
+const PREVIEW_STORAGE_KEY = 'PanelX_EDITOR_PREVIEW_CONFIG'
 
 const DESIGN = { width: 1920, height: 1080 }
 
@@ -707,6 +718,17 @@ function exportConfig() {
   URL.revokeObjectURL(url)
 }
 
+function previewDashboard() {
+  try {
+    const plain = JSON.parse(JSON.stringify(config)) as DashboardConfig
+    localStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(plain))
+  } catch {
+    // ignore
+  }
+  const href = router.resolve({ name: 'configurable', query: { source: 'local' } }).href
+  window.open(href, '_blank', 'noopener')
+}
+
 function loadDemo() {
   config.backgroundLayer = undefined
   config.widgets2D = [
@@ -740,6 +762,54 @@ function loadDemo() {
       props: { variant: 'corner' }
     }
   ]
+}
+
+function buildDemoConfig(): DashboardConfig {
+  return {
+    design: { ...designSize.value },
+    backgroundLayer: undefined,
+    widgets2D: [
+      {
+        id: 'stat1',
+        type: 'stat',
+        layout: { x: 20, y: 20, width: 300, height: 100 },
+        visible: true,
+        props: { value: 123456, label: '总销售额', prefix: '¥', trend: 'up', trendValue: '12.5%' }
+      },
+      {
+        id: 'chart1',
+        type: 'chart',
+        layout: { x: 20, y: 140, width: 600, height: 400 },
+        visible: true,
+        props: {
+          options: {
+            xAxis: { type: 'category', data: ['1月', '2月', '3月', '4月', '5月', '6月'] },
+            yAxis: { type: 'value' },
+            series: [{ data: [120, 132, 101, 134, 90, 230], type: 'line', smooth: true }]
+          },
+          height: '100%',
+          width: '100%'
+        }
+      },
+      {
+        id: 'decoration1',
+        type: 'decoration',
+        layout: { x: 640, y: 140, width: 200, height: 120 },
+        visible: true,
+        props: { variant: 'corner' }
+      }
+    ]
+  }
+}
+
+function loadDemoBlank() {
+  try {
+    localStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(buildDemoConfig()))
+  } catch {
+    // ignore
+  }
+  const href = router.resolve({ name: 'editorPreview' }).href
+  window.open(href, '_blank', 'noopener')
 }
 
 async function loadWorkshopConfig() {

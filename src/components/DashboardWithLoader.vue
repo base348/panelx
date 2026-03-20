@@ -16,6 +16,9 @@
         >
           加载配置
         </button>
+        <div v-if="loadFrom === 'localStorage'" class="panelx-dashboard-with-loader-hint">
+          未从本地读取到配置，请回到编辑器点击“预览”。
+        </div>
       </div>
     </template>
     <div v-else class="panelx-dashboard-with-loader-wrap">
@@ -32,6 +35,18 @@ import { setDebugFromConfig } from '../utils/logManager'
 import type { DashboardConfig } from '../types/dashboard'
 import type { DataSourceConfig } from '../types/comm'
 
+const props = withDefaults(
+  defineProps<{
+    /** file=手动选择配置文件；localStorage=从 localStorage 读取 */
+    loadFrom?: 'file' | 'localStorage'
+    /** localStorage key（loadFrom=localStorage 时使用） */
+    storageKey?: string
+  }>(),
+  { loadFrom: 'file', storageKey: 'PanelX_EDITOR_PREVIEW_CONFIG' }
+)
+
+const loadFrom = computed(() => props.loadFrom ?? 'file')
+
 const configLoaded = ref(false)
 /** 数据源列表（从 editor_config 加载），供绑定 datasourceKey 的 widget 使用 */
 const editorDatasources = ref<DataSourceConfig[]>([])
@@ -43,6 +58,11 @@ onMounted(async () => {
     if (loaded?.datasources?.length) editorDatasources.value = loaded.datasources
   } catch {
     // 无 editor_config 时无数据源
+  }
+
+  if (loadFrom.value === 'localStorage') {
+    const cfg = readConfigFromLocalStorage(props.storageKey)
+    if (cfg) applyConfig(cfg)
   }
 })
 const dashboardConfig = ref<DashboardConfig>({
@@ -97,6 +117,23 @@ function applyConfig(config: DashboardConfig) {
   configLoaded.value = true
 }
 
+function readConfigFromLocalStorage(key: string | undefined): DashboardConfig | null {
+  if (typeof localStorage === 'undefined') return null
+  const k = key && key.trim() ? key.trim() : 'PanelX_EDITOR_PREVIEW_CONFIG'
+  try {
+    const raw = localStorage.getItem(k)
+    if (!raw) return null
+    const data = JSON.parse(raw) as unknown
+    if (!data || typeof data !== 'object') return null
+    const design = (data as Record<string, unknown>).design
+    const widgets2D = (data as Record<string, unknown>).widgets2D
+    if (!design || !Array.isArray(widgets2D)) return null
+    return data as DashboardConfig
+  } catch {
+    return null
+  }
+}
+
 /** 渲染用：将配置转为 percent，与现有 Dashboard 一致 */
 const runtimeConfig = computed(() =>
   convertDashboardConfigPxToPercent({ ...dashboardConfig.value })
@@ -149,6 +186,11 @@ defineExpose({
 .panelx-dashboard-with-loader-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.8);
+}
+.panelx-dashboard-with-loader-hint {
+  margin-left: 1rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.875rem;
 }
 
 .panelx-dashboard-with-loader-wrap {

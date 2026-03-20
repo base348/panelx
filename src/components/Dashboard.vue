@@ -4,19 +4,19 @@
     class="panelx-dashboard"
     :style="containerStyle"
   >
-    <!-- 第 1 层：背景层（图片或 3D 场景） -->
-    <div v-if="config.backgroundLayer" class="panelx-dashboard-layer panelx-dashboard-layer-bg">
-      <template v-if="config.backgroundLayer.type === 'image'">
+    <!-- 第 1 层：背景层（图片或 3D 场景）；无 backgroundLayer 时可由 widgets3D 生成 3D 层 -->
+    <div v-if="effectiveBackgroundLayer" class="panelx-dashboard-layer panelx-dashboard-layer-bg">
+      <template v-if="effectiveBackgroundLayer.type === 'image'">
         <img
-          :src="config.backgroundLayer.url"
+          :src="effectiveBackgroundLayer.url"
           :style="backgroundImageStyle"
           class="panelx-dashboard-bg-image"
           alt=""
         />
       </template>
       <Scene3DFramework
-        v-else-if="config.backgroundLayer.type === 'scene3d'"
-        :config="config.backgroundLayer.config"
+        v-else-if="effectiveBackgroundLayer.type === 'scene3d'"
+        :config="effectiveBackgroundLayer.config"
         class="panelx-dashboard-bg-scene3d"
       />
     </div>
@@ -62,6 +62,8 @@ import {
 import { dataChainLog } from '../core/comm/dataChainLog'
 import Scene3DFramework from './Scene3DFramework.vue'
 import { getWidgetComponent } from '../widgets'
+import { widgets3DToScene3DConfig } from '../utils/widgets3DToScene3D'
+import type { BackgroundLayerConfig } from '../types/dashboard'
 
 const props = defineProps<{
   config: DashboardConfig
@@ -70,6 +72,19 @@ const props = defineProps<{
 }>()
 
 const config = computed(() => props.config)
+
+/** 有 widgets3D 且无 backgroundLayer 时，由 widgets3D 生成 3D 背景层，供 Configurable 加载编辑器导出配置 */
+const effectiveBackgroundLayer = computed((): BackgroundLayerConfig | undefined => {
+  if (config.value.backgroundLayer) return config.value.backgroundLayer
+  const list = config.value.widgets3D
+  if (list?.length) {
+    return {
+      type: 'scene3d',
+      config: widgets3DToScene3DConfig(list, { background: config.value.background, scene: config.value.scene3D })
+    }
+  }
+  return undefined
+})
 
 /** 向子组件提供 dashboard 级主题（整屏默认），widget 内 props.theme 可单独覆盖 */
 provide('dashboardTheme', computed(() => config.value.theme))
@@ -243,7 +258,7 @@ function setupDataSourceConnector() {
 }
 
 const backgroundImageStyle = computed((): Record<string, string> => {
-  const bg = config.value.backgroundLayer
+  const bg = effectiveBackgroundLayer.value
   if (!bg || bg.type !== 'image') return {}
   const fit = (bg as BackgroundLayerImage).fit ?? 'cover'
   return {

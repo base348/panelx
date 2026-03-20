@@ -1,3 +1,5 @@
+import { CanvasTexture, Group, Sprite, SpriteMaterial, SRGBColorSpace } from 'three'
+import { getSpriteInfoBoxBackgroundMaterial } from './SpriteInfoBoxBackground'
 import { CSS3DObject } from 'three/examples/jsm/Addons.js'
 import type {
   Scene3DInfoBoxConfig,
@@ -109,6 +111,16 @@ function ensureInfoBoxFxStyles(): void {
 }
 `
   document.head.appendChild(style)
+}
+
+function forceAlphaTo1(rgbaCss: string): string {
+  // 只处理 rgba(r,g,b,a)，其它格式直接原样返回
+  const m = rgbaCss.match(/^rgba\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/i)
+  if (!m) return rgbaCss
+  const r = m[1]
+  const g = m[2]
+  const b = m[3]
+  return `rgba(${r},${g},${b},1)`
 }
 
 /** 预制颜色：info=蓝青、success=绿、warning=黄、error=红 */
@@ -232,4 +244,261 @@ function toMultiLineHtml(s: string): string {
     .filter((line) => line.length > 0)
     .map((line) => escapeHtml(line))
     .join('<br/>')
+}
+
+const SPRITE_CANVAS_W = 512
+const SPRITE_CANVAS_H = 320
+
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2))
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.closePath()
+}
+
+function splitInfoLines(content?: string): string[] {
+  return String(content ?? '')
+    .split(/\r?\n|\|/g)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
+/**
+ * Sprite 信息框前景层：透明底，仅边框角/文字/备注/FX（底纹由独立 repeat 纹理 Sprite 负责）
+ */
+export function renderScene3DSpriteInfoBoxContentToCanvas(canvas: HTMLCanvasElement, config: Scene3DInfoBoxConfig): void {
+  const theme = resolveTheme(config)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  canvas.width = SPRITE_CANVAS_W
+  canvas.height = SPRITE_CANVAS_H
+
+  const w = canvas.width
+  const h = canvas.height
+
+  ctx.clearRect(0, 0, w, h)
+
+  const pad = 20
+  const radius = 18
+
+  const opaqueBorder = forceAlphaTo1(theme.border)
+
+  ctx.save()
+  roundRectPath(ctx, 0, 0, w, h, radius)
+  ctx.clip()
+
+  // corners
+  const cornerSize = 10
+  ctx.save()
+  ctx.strokeStyle = opaqueBorder
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  // top-left
+  ctx.moveTo(pad, pad + cornerSize)
+  ctx.lineTo(pad, pad)
+  ctx.lineTo(pad + cornerSize, pad)
+  // top-right
+  ctx.moveTo(w - pad - cornerSize, pad)
+  ctx.lineTo(w - pad, pad)
+  ctx.lineTo(w - pad, pad + cornerSize)
+  // bottom-left
+  ctx.moveTo(pad, h - pad - cornerSize)
+  ctx.lineTo(pad, h - pad)
+  ctx.lineTo(pad + cornerSize, h - pad)
+  // bottom-right
+  ctx.moveTo(w - pad - cornerSize, h - pad)
+  ctx.lineTo(w - pad, h - pad)
+  ctx.lineTo(w - pad, h - pad - cornerSize)
+  ctx.stroke()
+  ctx.restore()
+
+  // title / subtitle
+  ctx.save()
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'
+  ctx.font = 'bold 22px system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.fillText(String(config.title ?? ''), w / 2, 18)
+
+  if (config.subtitle) {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)'
+    ctx.font = '14px system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.fillText(String(config.subtitle ?? ''), w / 2, 48)
+  }
+  ctx.restore()
+
+  // meta line
+  if (config.metaLeft || config.metaRight) {
+    ctx.save()
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'
+    ctx.font = '14px system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.fillText(String(config.metaLeft ?? ''), pad, config.subtitle ? 72 : 62)
+
+    ctx.textAlign = 'right'
+    ctx.fillStyle = theme.accentColor
+    ctx.font = 'bold 14px system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.fillText(String(config.metaRight ?? ''), w - pad, config.subtitle ? 72 : 62)
+    ctx.restore()
+  }
+
+  // content
+  const contentLines = splitInfoLines(config.content)
+  if (contentLines.length) {
+    ctx.save()
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'
+    ctx.font = '14px system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    const startY = config.subtitle ? 92 : 82
+    const lineH = 18
+    for (let i = 0; i < contentLines.length; i++) {
+      const y = startY + i * lineH
+      if (y > h - 72) break
+      ctx.fillText(contentLines[i], pad, y)
+    }
+    ctx.restore()
+  }
+
+  // note box
+  if (config.note) {
+    ctx.save()
+    const noteY = h - 58
+    // 使用相对低透明底以避免在 sprite 里把红色边缘再“抬亮”为粉
+    ctx.fillStyle = 'rgba(0,0,0,0.20)'
+    roundRectPath(ctx, pad, noteY, w - pad * 2, 36, 10)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+
+    ctx.fillStyle = theme.accentColor
+    ctx.font = '14px system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(String(config.note ?? ''), pad + 10, noteY + 18)
+    ctx.restore()
+  }
+
+  // FX overlays
+  const fx = config.fx ?? 'scanlines'
+  const isAll = fx === 'all'
+  const enableScanlines = isAll || fx === 'scanlines'
+  const enableNoise = isAll || fx === 'noise'
+  const enableGlitch = isAll || fx === 'glitch'
+
+  /**
+   * 为了尽量贴近 CSS3D 的显示方式：
+   * - CSS 里特效元素挂了 mix-blend-mode: screen
+   * - scanlines/noise/glitch 的 opacity 也有固定目标值（见 ensureInfoBoxFxStyles）
+   * - sprite 版本这里做同样的“屏幕混合 + 透明度缩放”，让最终颜色更接近
+   */
+  if (enableScanlines) {
+    // 轻量 glow sweep（CSS scanlines 会叠加 glowSweep，且 opacity=0.14）
+    ctx.save()
+    ctx.globalCompositeOperation = 'screen'
+    ctx.globalAlpha = 0.10
+    const grad = ctx.createLinearGradient(0, h * 0.1, w, h * 0.9)
+    grad.addColorStop(0, 'rgba(0,0,0,0)')
+    grad.addColorStop(0.5, 'rgba(120,200,255,0.35)')
+    grad.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = grad
+    ctx.fillRect(-w * 0.2, -h * 0.2, w * 1.4, h * 1.4)
+    ctx.restore()
+
+    // scanlines：CSS 用 repeating-linear-gradient + opacity 0.28
+    ctx.save()
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.globalAlpha = 0.20
+    ctx.fillStyle = 'rgba(255,255,255,0.04)'
+    // 大致对应：周期 6px 左右、1px 强度
+    for (let y = 0; y < h; y += 7) ctx.fillRect(0, y, w, 1)
+    ctx.restore()
+  }
+
+  if (enableNoise) {
+    // noise：CSS opacity 0.10（屏幕混合）
+    ctx.save()
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.globalAlpha = 0.06
+    const count = 1800
+    for (let i = 0; i < count; i++) {
+      const x = Math.random() * w
+      const y = Math.random() * h
+      const a = Math.random() * 0.04
+      ctx.fillStyle = `rgba(255,255,255,${a})`
+      ctx.fillRect(x, y, 1, 1)
+    }
+    ctx.restore()
+  }
+
+  if (enableGlitch) {
+    // glitch：CSS opacity 0.34（屏幕混合）
+    ctx.save()
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.globalAlpha = 0.22
+    const bars = 4
+    for (let i = 0; i < bars; i++) {
+      const bh = 6 + Math.random() * 16
+      const by = 24 + Math.random() * (h - 94)
+      const shift = (Math.random() - 0.5) * 18
+      ctx.fillStyle = `rgba(120,200,255,${0.10 + Math.random() * 0.12})`
+      ctx.fillRect(0, by, w, bh)
+      // 简单错位影
+      ctx.globalAlpha = 0.18
+      ctx.fillStyle = `rgba(255,70,70,${0.06 + Math.random() * 0.10})`
+      ctx.fillRect(shift, by + 2, w, bh)
+      ctx.globalAlpha = 0.22
+    }
+    ctx.restore()
+  }
+
+  ctx.restore()
+}
+
+/** @deprecated 使用 renderScene3DSpriteInfoBoxContentToCanvas；底纹已拆到 SpriteInfoBoxBackground */
+export function renderScene3DSpriteInfoBoxToCanvas(canvas: HTMLCanvasElement, config: Scene3DInfoBoxConfig): void {
+  renderScene3DSpriteInfoBoxContentToCanvas(canvas, config)
+}
+
+/**
+ * sprite-info-box：底纹 repeat Sprite + 前景 canvas Sprite，组成 Group。
+ */
+export function createScene3DSpriteInfoBox(config: Scene3DInfoBoxConfig): Group {
+  const theme = resolveScene3DInfoBoxTheme(config)
+  const group = new Group()
+
+  const backMat = getSpriteInfoBoxBackgroundMaterial(theme.bg)
+  const back = new Sprite(backMat)
+
+  const canvas = document.createElement('canvas')
+  renderScene3DSpriteInfoBoxContentToCanvas(canvas, config)
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  texture.needsUpdate = true
+
+  const front = new Sprite(
+    new SpriteMaterial({
+      map: texture,
+      depthTest: false,
+      transparent: true
+    })
+  )
+
+  const widthWorld = 280 * 0.01
+  const heightWorld = widthWorld * (SPRITE_CANVAS_H / SPRITE_CANVAS_W)
+  back.scale.set(widthWorld, heightWorld, 1)
+  front.scale.set(widthWorld, heightWorld, 1)
+  back.position.z = -0.001
+  back.renderOrder = 0
+  front.renderOrder = 1
+
+  group.add(back, front)
+  return group
 }

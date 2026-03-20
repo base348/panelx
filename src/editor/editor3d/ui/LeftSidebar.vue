@@ -63,6 +63,19 @@
           </label>
         </div>
       </div>
+      <div class="panelx-editor3d-size-row panelx-editor3d-size-row-bg">
+        <span class="panelx-editor3d-size-label">相机图层</span>
+        <div class="panelx-editor3d-camera-layers">
+          <label
+            v-for="item in cameraLayers"
+            :key="item.layer"
+            class="panelx-editor3d-checkbox panelx-editor3d-camera-layer-item"
+          >
+            <input type="checkbox" :checked="item.enable" @change="onCameraLayerChange(item, $event)" />
+            {{ getLayerName(item.layer) }}
+          </label>
+        </div>
+      </div>
       <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
         <span class="panelx-editor3d-size-label">Lights</span>
         <div class="panelx-editor3d-size-inputs">
@@ -77,6 +90,18 @@
           <label>
             Pt
             <input v-model.number="sceneLights.point" type="number" step="0.1" />
+          </label>
+          <label>
+            Bloom St
+            <input v-model.number="bloomStrength" type="number" step="0.01" min="0" max="5" />
+          </label>
+          <label>
+            Bloom Rd
+            <input v-model.number="bloomRadius" type="number" step="0.01" min="0" max="2" />
+          </label>
+          <label title="越小越易泛光(整屏亮)，越大仅高亮(如 emissive)处泛光">
+            Bloom Th
+            <input v-model.number="bloomThreshold" type="number" step="0.01" min="0" max="2" />
           </label>
         </div>
       </div>
@@ -155,6 +180,8 @@
 import type { PropType } from 'vue'
 import type { ModelTypeDefinition } from '../../../framework'
 import type { StyleValue } from 'vue'
+import { LayerDef } from '../../../framework'
+import type { Scene3DCameraLayerItem } from '../../../types/dashboard'
 
 // 双向绑定：保留原 Editor3D 的 v-model 行为（避免 prop 只读问题）
 const leftGroups = defineModel<any>('leftGroups', { required: true })
@@ -164,7 +191,23 @@ const worldScale = defineModel<any>('worldScale', { required: true })
 const worldSizeZ = defineModel<any>('worldSizeZ', { required: true })
 const designCoord = defineModel<any>('designCoord', { required: true })
 const sceneLights = defineModel<any>('sceneLights', { required: true })
+const bloomStrength = defineModel<any>('bloomStrength', { required: true })
+const bloomRadius = defineModel<any>('bloomRadius', { required: true })
+const bloomThreshold = defineModel<any>('bloomThreshold', { required: true })
 const editorBackgroundColor = defineModel<any>('editorBackgroundColor', { required: true })
+const cameraLayers = defineModel<Scene3DCameraLayerItem[]>('cameraLayers', { required: true })
+
+const emit = defineEmits<{ (e: 'camera-layer-change'): void }>()
+
+function getLayerName(layer: number): string {
+  return LayerDef.getHelperName(layer) || `Layer ${layer}`
+}
+
+function onCameraLayerChange(item: Scene3DCameraLayerItem, e: Event): void {
+  const checked = (e.target as HTMLInputElement).checked
+  item.enable = checked
+  emit('camera-layer-change')
+}
 
 defineProps({
   dpr: { type: Number, required: true },

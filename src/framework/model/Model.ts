@@ -40,7 +40,7 @@ export class Model extends Object3D{
     /** 透明度：0~1，默认 1（100%） */
     private maskOpacity: number = 1
     /** 遮罩半径（world 单位）。默认 3，可在 editor 中配置 */
-    private maskRadiusWorld: number = 3
+    private maskRadiusWorld: number = 0.01
 
     /** 自旋转：开关 */
     private autoRotateEnabled: boolean = false

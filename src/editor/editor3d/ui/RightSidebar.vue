@@ -64,6 +64,23 @@
 
       <div v-if="rightGroups.transformOpen" class="panelx-editor3d-scale-editor">
         <div class="panelx-editor3d-pos-row">
+          <span class="panelx-editor3d-size-label">Layer</span>
+          <div class="panelx-editor3d-size-inputs">
+            <label>
+              L
+              <input
+                v-model="selectedLayerText"
+                type="text"
+                class="panelx-editor3d-props-value"
+                placeholder="如 0 或 0,32"
+                @change="onLayerInputChange"
+                @keydown.enter="onLayerInputChange"
+              />
+            </label>
+            <span class="panelx-editor3d-size-value">{{ layerHint }}</span>
+          </div>
+        </div>
+        <div class="panelx-editor3d-pos-row">
           <span class="panelx-editor3d-size-label">统一缩放</span>
           <div class="panelx-editor3d-size-inputs">
             <label>
@@ -305,6 +322,7 @@ const selectedPosition = defineModel<any>('selectedPosition', { required: true }
 const selectedScale = defineModel<any>('selectedScale', { required: true })
 const selectedScaleUniform = defineModel<any>('selectedScaleUniform', { required: true })
 const selectedRotation = defineModel<any>('selectedRotation', { required: true })
+const selectedLayerText = defineModel<any>('selectedLayerText', { required: true })
 const axisLock = defineModel<any>('axisLock', { required: true })
 const rotateCmd = defineModel<any>('rotateCmd', { required: true })
 const moveCmd = defineModel<any>('moveCmd', { required: true })
@@ -320,6 +338,8 @@ defineProps({
   onScaleUniformChange: { type: Function as PropType<() => void>, required: true },
   onScaleAxisChange: { type: Function as PropType<(axis: 'x' | 'y' | 'z') => void>, required: true },
   onRotationAxisChange: { type: Function as PropType<(axis: 'x' | 'y' | 'z') => void>, required: true },
+  onLayerInputChange: { type: Function as PropType<() => void>, required: true },
+  layerHint: { type: String, required: true },
   getMaskSettings: { type: Function as PropType<(id: string) => { color: string; opacity: number; radiusWorld: number }>, required: true },
   onMaskColorInput: { type: Function as PropType<(v: string) => void>, required: true },
   onMaskOpacityInput: { type: Function as PropType<(v: number) => void>, required: true },

@@ -1,11 +1,16 @@
 <template>
   <div class="panelx-example-configurable">
-    <DashboardWithLoader />
+    <DashboardWithLoader :load-from="loadFrom" storage-key="PanelX_EDITOR_PREVIEW_CONFIG" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { DashboardWithLoader } from '../components'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+const loadFrom = computed(() => ((route.query.source as string | undefined) === 'local' ? 'localStorage' : 'file'))
 </script>
 
 <style scoped>

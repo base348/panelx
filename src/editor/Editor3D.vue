@@ -8,7 +8,12 @@
       v-model:worldSizeZ="worldSizeZ"
       v-model:designCoord="designCoord"
       v-model:sceneLights="sceneLights"
+      v-model:bloomStrength="bloomStrength"
+      v-model:bloomRadius="bloomRadius"
+      v-model:bloomThreshold="bloomThreshold"
       v-model:editorBackgroundColor="editorBackgroundColor"
+      v-model:cameraLayers="cameraLayers"
+      @camera-layer-change="applyCameraLayers"
       :dpr="dpr"
       :viewport-size="viewportSize"
       :canvas-pixel-size="canvasPixelSize"
@@ -57,6 +62,7 @@
       v-model:selectedScaleUniform="selectedScaleUniform"
       v-model:selectedScale="selectedScale"
       v-model:selectedRotation="selectedRotation"
+      v-model:selectedLayerText="selectedLayerText"
       v-model:rotateCmd="rotateCmd"
       v-model:moveCmd="moveCmd"
       v-model:autoRotateCmd="autoRotateCmd"
@@ -69,6 +75,8 @@
       :on-scale-uniform-change="onScaleUniformChange"
       :on-scale-axis-change="onScaleAxisChange"
       :on-rotation-axis-change="onRotationAxisChange"
+      :on-layer-input-change="onLayerInputChange"
+      :layer-hint="layerHint"
       :get-mask-settings="getMaskSettings"
       :on-mask-color-input="onMaskColorInput"
       :on-mask-opacity-input="onMaskOpacityInput"
@@ -110,8 +118,8 @@ import { reactive, computed, ref, watch, onMounted, onUnmounted, nextTick } from
 import LeftSidebar from './editor3d/ui/LeftSidebar.vue'
 import MainArea from './editor3d/ui/MainArea.vue'
 import RightSidebar from './editor3d/ui/RightSidebar.vue'
-import { modelRegistry, setup3D } from '../framework'
-import type { DashboardConfig, WidgetConfig3D } from '../types/dashboard'
+import { LayerDef, modelRegistry, setup3D } from '../framework'
+import type { DashboardConfig, WidgetConfig3D, Scene3DCameraLayerItem } from '../types/dashboard'
 import type { ModelTypeDefinition, PropDefinition } from '../framework'
 import type { Loader } from '../framework'
 import type { World } from '../framework'
@@ -168,9 +176,29 @@ const sceneLights = reactive<{ ambient: number; hemisphere: number; point: numbe
   hemisphere: 2.0,
   point: 8.0
 })
+/** 先保证能看见泛光；若整屏发白再提高 Th、降低 St */
+const bloomStrength = ref(0.55)
+const bloomRadius = ref(0.22)
+/** 默认 0.35：在关闭 tone mapping 后，emissive 区域能稳定超过阈值并泛光 */
+const bloomThreshold = ref(0.35)
 
 /** 3D 编辑区背景色（主区域），可用色彩选择器配置 */
 const editorBackgroundColor = ref('#0f172a')
+
+/** 相机图层开关：控制相机渲染哪些层。编辑器中默认全部开启便于预览 */
+const cameraLayers = reactive<Scene3DCameraLayerItem[]>(
+  LayerDef.getAllLayers().map((layer) => ({ layer, enable: true }))
+)
+
+function applyCameraLayers(): void {
+  const sb = storyboardRef.value as BaseStoryBoard | null
+  if (!sb?.camera) return
+  const cam = sb.camera as { layers: { disableAll: () => void; enable: (n: number) => void } }
+  cam.layers.disableAll()
+  cameraLayers
+    .filter((item) => item.enable)
+    .forEach((item) => cam.layers.enable(LayerDef.normalize(item.layer)))
+}
 
 /** 3D world（由 setup3D 初始化；这里用最小接口以避免与具体实现强耦合） */
 type WorldLike = {
@@ -178,6 +206,7 @@ type WorldLike = {
   destroy?: () => void
   notifyResize?: () => void
   getRendererDom?: () => HTMLCanvasElement
+  setBloom?: (enabled: boolean, cfg?: { strength?: number; radius?: number; threshold?: number }) => void
   statsStyle?: (style: number) => void
   sceneTo?: (...args: any[]) => void
 }
@@ -243,6 +272,26 @@ watch(
   }
 )
 
+/** bloom 阈值：越高，参与泛光的像素越少（避免整模发白） */
+watch(cameraLayers, () => applyCameraLayers(), { deep: true })
+
+watch(
+  () => ({ strength: bloomStrength.value, radius: bloomRadius.value, threshold: bloomThreshold.value }),
+  (v) => {
+    const world = worldRef.value
+    if (!world?.setBloom) return
+    const st = Number(v.strength)
+    const rd = Number(v.radius)
+    const th = Number(v.threshold)
+    if (!Number.isFinite(st) || !Number.isFinite(rd) || !Number.isFinite(th)) return
+    world.setBloom(true, {
+      strength: Math.max(0, Math.min(5, st)),
+      radius: Math.max(0, Math.min(2, rd)),
+      threshold: Math.max(0, Math.min(2, th))
+    })
+  }
+)
+
 /** 拖拽 payload：模型类型 */
 interface DragPayloadType {
   kind: 'type'
@@ -289,6 +338,7 @@ const selectedPosition = reactive<{ x: number; y: number; z: number }>({ x: 0, y
 const selectedScale = reactive<{ x: number; y: number; z: number }>({ x: 1, y: 1, z: 1 })
 const selectedScaleUniform = ref(1)
 const selectedRotation = reactive<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 })
+const selectedLayerText = ref(String(LayerDef.default))
 const axisLock = reactive<{ x: boolean; y: boolean; z: boolean }>({ x: false, y: false, z: false })
 
 const selectedWidgetName = computed<string>({
@@ -343,6 +393,11 @@ const MASK_RADIUS_KEY = 'maskRadius'
 const SELECTED_MASK_OPACITY = 0.75
 const UNSELECTED_OPACITY_MULTIPLIER = 0.5
 
+// 自旋转：持久化到 w.props.custom（每个模型实例各自独立）
+const AUTO_ROTATE_ENABLED_KEY = 'autoRotateEnabled'
+const AUTO_ROTATE_AXIS_KEY = 'autoRotateAxis' // 'x'|'y'|'z'
+const AUTO_ROTATE_SPEED_DEG_KEY = 'autoRotateSpeedDeg' // 度/秒（editor UI 单位）
+
 function toHexColorString(v: unknown, fallback = '#38bdf8'): string {
   if (typeof v !== 'string') return fallback
   const s = v.trim()
@@ -364,6 +419,29 @@ function getMaskSettings(id: string): { color: string; opacity: number; radiusWo
   const r = Number(custom?.[MASK_RADIUS_KEY])
   const radiusWorld = Number.isFinite(r) && r > 0 ? r : 3
   return { color, opacity, radiusWorld }
+}
+
+function getAutoRotateSettings(id: string): { enabled: boolean; axis: 'x' | 'y' | 'z'; speedDeg: number } {
+  const w = getWidgetById(id)
+  const custom = (w?.props as Record<string, unknown> | undefined)?.[CUSTOM_PROPS_KEY] as Record<string, unknown> | undefined
+  const enabled = Boolean(custom?.[AUTO_ROTATE_ENABLED_KEY])
+  const axisRaw = custom?.[AUTO_ROTATE_AXIS_KEY]
+  const axis = axisRaw === 'x' || axisRaw === 'y' || axisRaw === 'z' ? axisRaw : ('y' as const)
+  const speedDegRaw = Number(custom?.[AUTO_ROTATE_SPEED_DEG_KEY])
+  const speedDeg = Number.isFinite(speedDegRaw) ? speedDegRaw : 30
+  return { enabled, axis, speedDeg }
+}
+
+function setAutoRotateSettingsToCustom(id: string, next: { enabled?: boolean; axis?: 'x' | 'y' | 'z'; speedDeg?: number }): void {
+  const w = getWidgetById(id)
+  if (!w) return
+  if (!w.props) w.props = {}
+  const props = w.props as Record<string, unknown>
+  if (typeof props[CUSTOM_PROPS_KEY] !== 'object' || props[CUSTOM_PROPS_KEY] === null) props[CUSTOM_PROPS_KEY] = {}
+  const custom = props[CUSTOM_PROPS_KEY] as Record<string, unknown>
+  if (next.enabled != null) custom[AUTO_ROTATE_ENABLED_KEY] = Boolean(next.enabled)
+  if (next.axis != null) custom[AUTO_ROTATE_AXIS_KEY] = next.axis
+  if (next.speedDeg != null && Number.isFinite(next.speedDeg)) custom[AUTO_ROTATE_SPEED_DEG_KEY] = next.speedDeg
 }
 
 function setMaskSettingsToCustom(id: string, next: { color?: string; opacity?: number; radiusWorld?: number }): void {
@@ -395,6 +473,12 @@ watch(
   (next, prev) => {
     if (prev) applyMaskToModel(prev, { selected: false })
     if (next) applyMaskToModel(next, { selected: true })
+    if (next) {
+      const ar = getAutoRotateSettings(next)
+      autoRotateCmd.enabled = ar.enabled
+      autoRotateCmd.axis = ar.axis
+      autoRotateCmd.speedDeg = ar.speedDeg
+    }
   }
 )
 
@@ -479,22 +563,80 @@ async function onImportConfigFile(e: Event): Promise<void> {
       designSize3D.height = designSize.height
     }
 
-    // 4) 如果 props.sceneLights 存在，恢复灯光（取第一个 widget 的 sceneLights）
-    const firstLights = (config.widgets3D?.[0]?.props as Record<string, unknown> | undefined)?.sceneLights as
-      | { ambient?: unknown; hemisphere?: unknown; point?: unknown }
-      | undefined
-    if (firstLights) {
-      const a = Number(firstLights.ambient)
-      const h = Number(firstLights.hemisphere)
-      const p = Number(firstLights.point)
+    // 4) 从 payload.scene3D 恢复灯光/Bloom/相机图层；不存在则兼容旧结构（第一个 widget.props）
+    const scene3D = payload.scene3D
+
+    if (scene3D?.lights) {
+      const a = Number(scene3D.lights.ambient)
+      const h = Number(scene3D.lights.hemisphere)
+      const p = Number(scene3D.lights.point)
       if (Number.isFinite(a)) sceneLights.ambient = a
       if (Number.isFinite(h)) sceneLights.hemisphere = h
       if (Number.isFinite(p)) sceneLights.point = p
+    } else {
+      const firstLights = (config.widgets3D?.[0]?.props as Record<string, unknown> | undefined)?.sceneLights as
+        | { ambient?: unknown; hemisphere?: unknown; point?: unknown }
+        | undefined
+      if (firstLights) {
+        const a = Number(firstLights.ambient)
+        const h = Number(firstLights.hemisphere)
+        const p = Number(firstLights.point)
+        if (Number.isFinite(a)) sceneLights.ambient = a
+        if (Number.isFinite(h)) sceneLights.hemisphere = h
+        if (Number.isFinite(p)) sceneLights.point = p
+      }
+    }
+
+    if (scene3D?.bloom) {
+      const s = Number(scene3D.bloom.strength)
+      const r = Number(scene3D.bloom.radius)
+      const t = Number(scene3D.bloom.threshold)
+      if (Number.isFinite(s)) bloomStrength.value = Math.max(0, Math.min(5, s))
+      if (Number.isFinite(r)) bloomRadius.value = Math.max(0, Math.min(2, r))
+      if (Number.isFinite(t)) bloomThreshold.value = Math.max(0, Math.min(2, t))
+    } else {
+      const firstBloom = (config.widgets3D?.[0]?.props as Record<string, unknown> | undefined)?.sceneBloom as
+        | { strength?: unknown; radius?: unknown; threshold?: unknown }
+        | undefined
+      if (firstBloom) {
+        const s = Number(firstBloom.strength)
+        const r = Number(firstBloom.radius)
+        const t = Number(firstBloom.threshold)
+        if (Number.isFinite(s)) bloomStrength.value = Math.max(0, Math.min(5, s))
+        if (Number.isFinite(r)) bloomRadius.value = Math.max(0, Math.min(2, r))
+        if (Number.isFinite(t)) bloomThreshold.value = Math.max(0, Math.min(2, t))
+      }
+    }
+
+    if (scene3D?.camera?.layers && Array.isArray(scene3D.camera.layers)) {
+      cameraLayers.splice(
+        0,
+        cameraLayers.length,
+        ...scene3D.camera.layers.map((item) => ({
+          layer: LayerDef.normalize(Number(item.layer ?? LayerDef.default)),
+          enable: Boolean(item.enable)
+        }))
+      )
+    } else {
+      const firstCameraLayers = (config.widgets3D?.[0]?.props as Record<string, unknown> | undefined)?.cameraLayers as
+        | Array<{ layer?: unknown; enable?: unknown }>
+        | undefined
+      if (firstCameraLayers && Array.isArray(firstCameraLayers)) {
+        cameraLayers.splice(
+          0,
+          cameraLayers.length,
+          ...firstCameraLayers.map((item) => ({
+            layer: LayerDef.normalize(Number(item.layer ?? LayerDef.default)),
+            enable: Boolean(item.enable)
+          }))
+        )
+      }
     }
 
     // 5) 按配置重新加入场景
     await nextTick()
     applyOrthographicByWorldSize()
+    applyCameraLayers()
     for (const w of config.widgets3D ?? []) {
       addWidgetModelToScene(w)
     }
@@ -549,6 +691,12 @@ function applyAutoRotateToSelected(): void {
   model.setAutoRotateAxis(axisVec)
   model.setAutoRotateSpeed(degToRad(autoRotateCmd.speedDeg || 0))
   model.setAutoRotateEnabled(Boolean(autoRotateCmd.enabled))
+
+  setAutoRotateSettingsToCustom(id, {
+    enabled: Boolean(autoRotateCmd.enabled),
+    axis,
+    speedDeg: autoRotateCmd.speedDeg
+  })
 }
 
 function clearDemoInfoBoxes(): void {
@@ -689,6 +837,45 @@ function degToRad(deg: number): number {
   return (deg * Math.PI) / 180
 }
 
+function normalizeLayerValues(layer: unknown): number[] {
+  const valid = new Set(LayerDef.getAllLayers())
+  const src = Array.isArray(layer) ? layer : [layer]
+  const nums = src
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n))
+    .map((n) => Math.trunc(n))
+    .filter((n) => valid.has(n))
+  const uniq = Array.from(new Set(nums))
+  return uniq.length ? uniq : [LayerDef.default]
+}
+
+function parseLayerTextToValues(text: string): number[] {
+  const arr = String(text ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => Number(s))
+  return normalizeLayerValues(arr)
+}
+
+function layerValuesToText(values: number[]): string {
+  return values.join(',')
+}
+
+function applyLayersToObject(obj: Object3D, values: number[]): void {
+  const first = values[0] ?? LayerDef.default
+  obj.traverse((child) => {
+    child.layers.set(first)
+    for (const l of values.slice(1)) child.layers.enable(l)
+  })
+}
+
+const layerHint = computed(() =>
+  LayerDef.getAllLayers()
+    .map((l) => `${LayerDef.getHelperName(l)}=${l}`)
+    .join(' | ')
+)
+
 /** 主区域是否处于拖拽悬停 */
 const isDragOver = ref(false)
 
@@ -724,6 +911,7 @@ function onSelectWidget(w: WidgetConfig3D): void {
   selectedRotation.x = rot[0] ?? 0
   selectedRotation.y = rot[1] ?? 0
   selectedRotation.z = rot[2] ?? 0
+  selectedLayerText.value = layerValuesToText(normalizeLayerValues(w.layer))
 }
 
 /** 模型类型拖入：拖起时写入 payload */
@@ -799,6 +987,7 @@ function confirmDropDialog() {
   const w: WidgetConfig3D = {
     id,
     type: 'model3d',
+    layer: LayerDef.default,
     visible: true,
     props: {
       position,
@@ -813,8 +1002,12 @@ function confirmDropDialog() {
     w.props!.typeId = payload.id
   }
 
-  // info-box：给一个默认的 custom，拖入后立即有内容可见
-  if (w.props!.typeId === 'info-box') {
+  // info-box / sprite-info-box：给一个默认的 custom，拖入后立即有内容可见
+  if (w.props!.typeId === 'info-box' || w.props!.typeId === 'sprite-info-box') {
+    if (w.props!.typeId === 'sprite-info-box') {
+      // Sprite 信息框默认放到 sprite 图层，方便用相机图层开关控制显隐
+      w.layer = LayerDef.sprite
+    }
     ;(w.props as Record<string, unknown>)[CUSTOM_PROPS_KEY] = {
       title: 'Robot / Telemetry',
       subtitle: 'ROBOT STATUS PANEL',
@@ -825,7 +1018,7 @@ function confirmDropDialog() {
       content: 'General purpose information content.',
       note: 'Link stable · 0.8ms'
     }
-    // CSS3D 默认有 0.01 scale；这里默认值用 1 即可
+    // 默认值用 1 即可（渲染时会叠加 widget 的 scale）
     w.props!.scale = w.props!.scale ?? 1
   }
   if (!config.widgets3D) config.widgets3D = []
@@ -872,11 +1065,15 @@ function addWidgetModelToScene(w: WidgetConfig3D): void {
   const modelName = w.id
   const model = createModelByTypeId(typeId, modelName, source)
   if (!model) return
+  model.layer = normalizeLayerValues(w.layer)
 
   // 初始化同步 custom props（让新建实例就能体现配置）
   const custom = props[CUSTOM_PROPS_KEY]
   if (custom && typeof custom === 'object') {
     for (const [k, v] of Object.entries(custom as Record<string, unknown>)) {
+      // 自旋转/遮罩等“引擎级状态”由 setAutoRotate/Mask 在运行时直接生效
+      if (k === MASK_COLOR_KEY || k === MASK_OPACITY_KEY || k === MASK_RADIUS_KEY) continue
+      if (k === AUTO_ROTATE_ENABLED_KEY || k === AUTO_ROTATE_AXIS_KEY || k === AUTO_ROTATE_SPEED_DEG_KEY) continue
       try {
         model.propUpdate(k, v)
       } catch {
@@ -884,6 +1081,13 @@ function addWidgetModelToScene(w: WidgetConfig3D): void {
       }
     }
   }
+
+  // 自旋转：从配置读取并写入 Model（保证导入配置后也能立即生效）
+  const ar = getAutoRotateSettings(w.id)
+  const axisVec = ar.axis === 'x' ? new Vector3(1, 0, 0) : ar.axis === 'y' ? new Vector3(0, 1, 0) : new Vector3(0, 0, 1)
+  model.setAutoRotateAxis(axisVec)
+  model.setAutoRotateSpeed(degToRad(ar.speedDeg || 0))
+  model.setAutoRotateEnabled(Boolean(ar.enabled))
 
   const pos = (props.position as [number, number, number] | undefined) ?? [0, 0, 0]
   const rawScale = props.scale
@@ -918,11 +1122,15 @@ function addWidgetModelToScene(w: WidgetConfig3D): void {
     const tf = pendingTransforms.get(modelName)
     const inst = model as unknown as Model
     const isCss3d = Boolean((inst as unknown as { isCss3d?: boolean }).isCss3d)
-    const cssScaleMul = isCss3d ? 0.01 : 1
+    // InfoBoxModel 内部的 CSS3DObject 已经设置了默认 scale(0.01)，这里不要再乘一层 0.01
+    const cssScaleMul = isCss3d ? 1 : 1
     if (inst.scene && tf) {
       inst.scene.position.set(tf.position[0], tf.position[1], tf.position[2])
-      inst.scene.scale.set(tf.scale[0] * cssScaleMul, tf.scale[1] * cssScaleMul, tf.scale[2] * cssScaleMul)
+      // InfoBoxModel 内部的 CSS3DObject 已有默认 scale（0.01）
+      // 此处用相对缩放，避免把默认值覆盖为 1
+      inst.scene.scale.multiply(new Vector3(tf.scale[0] * cssScaleMul, tf.scale[1] * cssScaleMul, tf.scale[2] * cssScaleMul))
       inst.scene.rotation.set(degToRad(tf.rotation[0]), degToRad(tf.rotation[1]), degToRad(tf.rotation[2]))
+      applyLayersToObject(inst.scene, model.layer)
     }
     ;(sb as BaseStoryBoard).addModel(inst)
     addedModelNames.add(modelName)
@@ -935,6 +1143,8 @@ function addWidgetModelToScene(w: WidgetConfig3D): void {
 function onFrameworkLoaded(loader: Loader, world: World): void {
   loaderRef.value = loader
   worldRef.value = world
+  // 默认收敛参数：仅高亮 emissive（如叶轮）触发明显 bloom，避免整体过曝
+  world.setBloom(true, { strength: bloomStrength.value, radius: bloomRadius.value, threshold: bloomThreshold.value })
 
   if (!storyboardRef.value) {
     const aspect = designSize.height > 0 ? designSize.width / designSize.height : 1
@@ -950,7 +1160,6 @@ function onFrameworkLoaded(loader: Loader, world: World): void {
       1000
     )
     cam.position.set(6, 6, 6)
-    cam.layers.enableAll()
     const sb = new ControlsStoryBoard('Editor3D', cam, {
       background: null,
       orthographicSize: halfH,
@@ -967,6 +1176,7 @@ function onFrameworkLoaded(loader: Loader, world: World): void {
       sb.controls.dampingFactor = 0.05
     }
     storyboardRef.value = sb
+    applyCameraLayers()
     world.sceneTo(sb)
     nextTick(() => world.notifyResize())
   }
@@ -1061,6 +1271,25 @@ function onPositionInputChange(axis: 'x' | 'y' | 'z'): void {
   if (obj) {
     obj.position.set(nextWorld[0], nextWorld[1], nextWorld[2])
   }
+}
+
+function onLayerInputChange(): void {
+  const id = selectedWidgetId.value
+  if (!id) return
+  const w = config.widgets3D?.find((item) => item.id === id)
+  if (!w) return
+  const nextLayers = parseLayerTextToValues(selectedLayerText.value)
+  w.layer = nextLayers.length === 1 ? nextLayers[0] : nextLayers
+  selectedLayerText.value = layerValuesToText(nextLayers)
+
+  const sb = storyboardRef.value as BaseStoryBoard | null
+  const model = sb?.getModelByName(id)
+  if (model) {
+    model.layer = nextLayers
+    if (model.scene) applyLayersToObject(model.scene, nextLayers)
+  }
+  const obj = addedModelNodes.get(id)
+  if (obj) applyLayersToObject(obj, nextLayers)
 }
 
 function updateSelectedWidgetScale(scaleVec: [number, number, number]): void {
@@ -1209,25 +1438,55 @@ onUnmounted(() => {
 })
 
 function exportConfig() {
+  const store = loaderRef.value?.getStore()
   const payload: DashboardConfig = {
     design: { ...config.design },
     widgets2D: [],
     widgets3D: config.widgets3D?.length
-      ? (config.widgets3D as WidgetConfig3D[]).map((w) => ({
-          id: w.id,
-          type: w.type,
-          worldSize: w.worldSize ?? { x: sceneWorldSize.value.x, y: sceneWorldSize.value.y, z: sceneWorldSize.value.z },
-          visible: w.visible,
-          props: {
-            ...(w.props ? { ...w.props } : {}),
-            sceneLights: {
-              ambient: sceneLights.ambient,
-              hemisphere: sceneLights.hemisphere,
-              point: sceneLights.point
-            }
+      ? (config.widgets3D as WidgetConfig3D[]).map((w) => {
+          const props = { ...(w.props ? { ...w.props } : {}) } as Record<string, unknown>
+          const model = store?.getModel(w.id) as { source?: string } | undefined
+          if (model?.source) props.source = model.source
+
+          // 将每个模型实例的“遮罩/自旋转”状态落到 props.custom，保证导入后可重现
+          const custom = (typeof props[CUSTOM_PROPS_KEY] === 'object' && props[CUSTOM_PROPS_KEY] !== null
+            ? { ...(props[CUSTOM_PROPS_KEY] as Record<string, unknown>) }
+            : {}) as Record<string, unknown>
+          const ms = getMaskSettings(w.id)
+          custom[MASK_COLOR_KEY] = ms.color
+          custom[MASK_OPACITY_KEY] = ms.opacity
+          custom[MASK_RADIUS_KEY] = ms.radiusWorld
+          const ar = getAutoRotateSettings(w.id)
+          custom[AUTO_ROTATE_ENABLED_KEY] = ar.enabled
+          custom[AUTO_ROTATE_AXIS_KEY] = ar.axis
+          custom[AUTO_ROTATE_SPEED_DEG_KEY] = ar.speedDeg
+          props[CUSTOM_PROPS_KEY] = custom
+
+          return {
+            id: w.id,
+            type: w.type,
+            layer: w.layer,
+            worldSize: w.worldSize ?? { x: sceneWorldSize.value.x, y: sceneWorldSize.value.y, z: sceneWorldSize.value.z },
+            visible: w.visible,
+            props
           }
-        }))
+        })
       : []
+  }
+  payload.scene3D = {
+    lights: {
+      ambient: sceneLights.ambient,
+      hemisphere: sceneLights.hemisphere,
+      point: sceneLights.point
+    },
+    bloom: {
+      strength: bloomStrength.value,
+      radius: bloomRadius.value,
+      threshold: bloomThreshold.value
+    },
+    camera: {
+      layers: cameraLayers.map((item) => ({ layer: LayerDef.normalize(item.layer), enable: item.enable }))
+    }
   }
   payload.background = editorBackgroundColor.value
   if (config.debug != null) payload.debug = config.debug
@@ -1338,6 +1597,14 @@ function exportConfig() {
 }
 .panelx-editor3d-size-row-bg {
   margin-top: 0.25rem;
+}
+.panelx-editor3d-camera-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+.panelx-editor3d-camera-layer-item {
+  white-space: nowrap;
 }
 .panelx-editor3d-color-wrap {
   display: flex;

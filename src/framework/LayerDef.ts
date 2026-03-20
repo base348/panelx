@@ -10,7 +10,15 @@ export class LayerDef {
     static readonly ui = 8
     static readonly sprite = 16
 
+    /** 仅此层参与 Bloom 后处理（three.js layer 仅支持 0..31） */
+    static readonly bloom = 30
+
     static readonly rayCast = 31
+
+    /** 兼容旧配置：历史上错误使用了 layer=32 作为 Bloom */
+    static normalize(layer: number): number {
+        return layer === 32 ? LayerDef.bloom : layer
+    }
 
     private static layerNameMap = new Map<number, string>()
 
@@ -21,6 +29,7 @@ export class LayerDef {
         LayerDef.layerNameMap.set(LayerDef.construct, "Construct")
         LayerDef.layerNameMap.set(LayerDef.ui, "UI")
         LayerDef.layerNameMap.set(LayerDef.sprite, "Sprite")
+        LayerDef.layerNameMap.set(LayerDef.bloom, "Bloom")
         LayerDef.layerNameMap.set(LayerDef.rayCast, "RayCast")
     }
 

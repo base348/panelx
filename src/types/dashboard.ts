@@ -17,7 +17,10 @@ export type WidgetType2D =
   | 'deviceCard'
   | 'bottomNav'
   | 'progressList'
+  | 'parkScaleStats'
   | 'scaleRuler'
+  | 'infoBox2D'
+  | 'leaderLines2D'
 export type WidgetType3D = 'scene3d' | 'model3d'
 export type WidgetType = WidgetType2D | WidgetType3D
 
@@ -48,6 +51,8 @@ export interface WidgetConfig3D {
   type: WidgetType3D
   /** 3D 世界尺寸/范围 */
   worldSize?: WorldSize
+  /** 模型层配置：与 LayerDef 一致。单层 number，多层 number[] */
+  layer?: number | number[]
   visible?: boolean
   props?: Record<string, unknown>
 }
@@ -108,6 +113,8 @@ export interface DashboardConfig {
   widgets2D: WidgetConfig2D[]
   /** 3D 组件列表（可选，可后续扩展） */
   widgets3D?: WidgetConfig3D[]
+  /** Dashboard 级别的 3D 场景参数（相机图层/灯光/Bloom 等由编辑器控制） */
+  scene3D?: DashboardScene3DConfig
   /** 整屏主题，统一作为所有 widget 的默认主题；单个 widget 的 props.theme 可覆盖 */
   theme?: DashboardTheme
   /** layout 单位：px=设计稿像素（来自配置），percent=加载后转换的 0-100，渲染时不再使用 px */
@@ -184,6 +191,17 @@ export interface Scene3DInfoBoxConfig {
   color?: Scene3DInfoBoxColorOverride
   /** 屏幕特效：none/scanlines/noise/glitch/all */
   fx?: 'none' | 'scanlines' | 'noise' | 'glitch' | 'all'
+  /**
+   * 渲染方式：
+   * - `css3d`：使用 CSS3DObject（现有 infobox）
+   * - `sprite`：使用 THREE Sprite（sprite-info-box）
+   */
+  renderType?: 'css3d' | 'sprite'
+  /**
+   * 信息框对应的渲染图层（用于相机 layer 开关控制显隐）。
+   * 若不提供，默认使用 `LayerDef.default`。
+   */
+  layer?: number
   /** 是否显示 */
   visible?: boolean
 }
@@ -196,6 +214,13 @@ export interface Scene3DLightConfig {
   hemisphere?: number
   /** 点光源强度 */
   point?: number
+}
+
+/** 3D 场景泛光 Bloom 参数（World.setBloom 所需） */
+export interface Scene3DBloomConfig {
+  strength?: number
+  radius?: number
+  threshold?: number
 }
 
 /** 3D 相机类型 */
@@ -221,6 +246,8 @@ export interface Scene3DCameraConfig {
 
 /** 3D 场景配置（在 App 中配置，传给 Scene3DFramework） */
 export interface Scene3DConfig {
+  /** 原始 3D widgets（来自 3D 编辑器导出），用于按 typeId 创建实例并执行 custom props 逻辑 */
+  widgets3D?: WidgetConfig3D[]
   /** 要加载并加入场景的模型列表 */
   models?: Model3DItemConfig[]
   /** 场景内悬浮信息框（绑定模型或指定坐标，红/黄科技感框） */
@@ -231,6 +258,15 @@ export interface Scene3DConfig {
   background?: string | null
   /** 灯光强度，不填则使用内置默认 */
   lights?: Scene3DLightConfig
+  /** Bloom 参数，不填则不启用/沿用默认 */
+  bloom?: Scene3DBloomConfig
   /** 相机配置：类型（透视/正交）及正交时的 size */
   camera?: Scene3DCameraConfig
+}
+
+/** Dashboard 级别的 3D 场景参数（用于由编辑器统一控制） */
+export interface DashboardScene3DConfig {
+  camera?: Scene3DCameraConfig
+  lights?: Scene3DLightConfig
+  bloom?: Scene3DBloomConfig
 }

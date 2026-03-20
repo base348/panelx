@@ -1,17 +1,53 @@
-import {PCFSoftShadowMap, REVISION, SRGBColorSpace, Vector2, WebGLRenderer} from 'three'
-import type {StoryBoard} from "./StoryBoard.ts";
-import {FrequencyManager} from "./FrequencyManager.ts";
-import {StatsWrapper} from "./StatsWrapper.ts";
-import {bindConfig} from "./util.ts";
-import {CSS3DRenderer} from "three/examples/jsm/Addons.js";
+import {
+    AdditiveBlending,
+    HalfFloatType,
+    Mesh,
+    NoToneMapping,
+    OrthographicCamera,
+    PCFSoftShadowMap,
+    PlaneGeometry,
+    REVISION,
+    Scene,
+    ShaderMaterial,
+    SRGBColorSpace,
+    Uniform,
+    Vector2,
+    WebGLRenderTarget,
+    WebGLRenderer
+} from 'three'
+import type { StoryBoard } from "./StoryBoard.ts"
+import { FrequencyManager } from "./FrequencyManager.ts"
+import { LayerDef } from "./LayerDef.ts"
+import { StatsWrapper } from "./StatsWrapper.ts"
+import { bindConfig } from "./util.ts"
+import { CSS3DRenderer } from "three/examples/jsm/Addons.js"
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 
 const defaultUpdateFrequency = 1
+const defaultBloom = { strength: 0.9, radius: 0.35, threshold: 0.8 }
+
+export type BloomConfig = {
+    strength?: number
+    radius?: number
+    threshold?: number
+}
 
 export class World {
     private storyBoardStore: StoryBoard[] = []
     private windowSize: Vector2 = new Vector2()
     private renderer!: WebGLRenderer
     private cssRenderer!: CSS3DRenderer
+    private composer!: EffectComposer
+    private renderPass!: RenderPass
+    private bloomPass!: UnrealBloomPass
+    private bloomEnabled: boolean = false
+    /** 仅 Bloom 层参与泛光时：先存“纯 Bloom 层”图，再叠加“纯泛光”(composer-纯层) */
+    private bloomLayerOnlyRT!: WebGLRenderTarget
+    private bloomQuadScene!: Scene
+    private bloomQuadCamera!: OrthographicCamera
+    private bloomQuadMesh!: Mesh<PlaneGeometry, ShaderMaterial>
     private stats: StatsWrapper = new StatsWrapper()
     private container!: Element
     private contextLost: boolean = false
@@ -74,6 +110,9 @@ export class World {
 
         this.renderer.setPixelRatio(window.devicePixelRatio)
         this.renderer.outputColorSpace = SRGBColorSpace
+        // 关闭色调映射，保证写入 Composer 的是线性 HDR，Bloom 才能看到 >1 的亮度
+        this.renderer.toneMapping = NoToneMapping
+        this.renderer.toneMappingExposure = 1
         this.renderer.setSize(size.x, size.y)
         this.renderer.autoClear = false
         // this.renderer.setClearAlpha(0.1)
@@ -105,6 +144,57 @@ export class World {
         console.log('WebGL支持级别:', this.renderer.getContext().getParameter(this.renderer.getContext().VERSION))
         this.renderer.debug.checkShaderErrors = true; // 启用着色器错误检查
         this.renderer.shadowMap.type = PCFSoftShadowMap; // 激活高级渲染特性
+
+        // post-processing: bloom（仅对高亮像素生效）
+        this.renderPass = new RenderPass(undefined as any, undefined as any)
+        this.bloomPass = new UnrealBloomPass(
+            new Vector2(size.x, size.y),
+            defaultBloom.strength,
+            defaultBloom.radius,
+            defaultBloom.threshold
+        )
+        this.composer = new EffectComposer(this.renderer)
+        this.composer.setPixelRatio(window.devicePixelRatio)
+        this.composer.setSize(size.x, size.y)
+        this.composer.addPass(this.renderPass)
+        this.composer.addPass(this.bloomPass)
+        this.composer.renderToScreen = false
+        this.bloomLayerOnlyRT = new WebGLRenderTarget(size.x, size.y, { type: HalfFloatType })
+        this.bloomLayerOnlyRT.texture.name = 'World.bloomLayerOnly'
+        // 只叠加「泛光」= (Composer 输出 - 纯 Bloom 层)，避免底图粉红 + 整图叠加导致过曝发白
+        this.bloomQuadCamera = new OrthographicCamera(-1, 1, 1, -1, -1, 1)
+        this.bloomQuadScene = new Scene()
+        this.bloomQuadMesh = new Mesh(
+            new PlaneGeometry(2, 2),
+            new ShaderMaterial({
+                uniforms: {
+                    tComposer: new Uniform(null as unknown as import('three').Texture),
+                    tBloomLayer: new Uniform(null as unknown as import('three').Texture)
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D tComposer;
+                    uniform sampler2D tBloomLayer;
+                    varying vec2 vUv;
+                    void main() {
+                        vec4 a = texture2D(tComposer, vUv);
+                        vec4 b = texture2D(tBloomLayer, vUv);
+                        gl_FragColor = max(vec4(0.0), a - b);
+                    }
+                `,
+                depthTest: false,
+                depthWrite: false,
+                blending: AdditiveBlending,
+                transparent: true
+            })
+        )
+        this.bloomQuadScene.add(this.bloomQuadMesh)
         this.renderer.domElement.addEventListener('webglcontextlost', (e) => {
             // 必须 preventDefault，否则浏览器可能不尝试恢复
             e.preventDefault()
@@ -133,10 +223,19 @@ export class World {
         return this.renderer.domElement
     }
 
+    /** 设置 bloom 开关与参数（默认仅增强 emissive 高亮区域） */
+    setBloom(enabled: boolean, cfg?: BloomConfig): void {
+        this.bloomEnabled = enabled
+        if (cfg?.strength != undefined) this.bloomPass.strength = cfg.strength
+        if (cfg?.radius != undefined) this.bloomPass.radius = cfg.radius
+        if (cfg?.threshold != undefined) this.bloomPass.threshold = cfg.threshold
+    }
+
     /** 停止渲染并释放资源，组件卸载时调用 */
     destroy(): void {
         window.removeEventListener('resize', this.boundResizeHandler)
         this.renderer.setAnimationLoop(null)
+        this.bloomLayerOnlyRT?.dispose()
         this.renderer.dispose()
         this.cssRenderer.domElement.remove()
         this.renderer.domElement.remove()
@@ -203,7 +302,40 @@ export class World {
             let size = this.getSize()
             this.renderer.setViewport(0, 0, size.x, size.y)
         }
-        this.renderer.render(sb.scene, sb.camera)
+        if (this.bloomEnabled) {
+            const cam = sb.camera
+            const w = sb.fullScreen ? this.getSize().x : sb.getSize().x
+            const h = sb.fullScreen ? this.getSize().y : sb.getSize().y
+            // 保存相机当前图层（编辑器/运行时可能已限制可见层），避免被 enableAll 覆盖
+            const savedLayersMask = cam.layers.mask
+            // 1) 用当前相机图层渲染主场景（尊重相机图层开关）
+            this.renderer.setRenderTarget(null)
+            this.renderer.clear(true, true, false)
+            this.renderer.render(sb.scene, cam)
+            // 2) 仅 Bloom 层渲染到 RT，再进 Composer 得到「Bloom 层+泛光」
+            //    且需尊重相机当前 mask：若相机未开启 Bloom 层，则不生成 Bloom 叠加
+            const bloomBit = 1 << LayerDef.bloom
+            const bloomEnabledInCamera = (savedLayersMask & bloomBit) !== 0
+            cam.layers.mask = bloomEnabledInCamera ? bloomBit : 0
+            const pr = window.devicePixelRatio
+            this.bloomLayerOnlyRT.setSize(Math.round(w * pr), Math.round(h * pr))
+            this.renderer.setRenderTarget(this.bloomLayerOnlyRT)
+            this.renderer.clear(true, true, false)
+            this.renderer.render(sb.scene, cam)
+            this.renderPass.scene = sb.scene
+            this.renderPass.camera = cam
+            this.composer.setSize(w, h)
+            this.composer.setPixelRatio(window.devicePixelRatio)
+            this.composer.render()
+            cam.layers.mask = savedLayersMask
+            // 3) 只叠加「泛光」= composer - 纯 Bloom 层，避免粉红过曝成白
+            this.bloomQuadMesh.material.uniforms.tComposer.value = this.composer.readBuffer.texture
+            this.bloomQuadMesh.material.uniforms.tBloomLayer.value = this.bloomLayerOnlyRT.texture
+            this.renderer.setRenderTarget(null)
+            this.renderer.render(this.bloomQuadScene, this.bloomQuadCamera)
+        } else {
+            this.renderer.render(sb.scene, sb.camera)
+        }
         this.cssRenderer.render(sb.scene, sb.camera)
     }
 
@@ -214,6 +346,8 @@ export class World {
     private onWindowResize() {
         let size = this.getSize()
         this.renderer.setSize(size.x, size.y)
+        this.composer.setSize(size.x, size.y)
+        this.bloomLayerOnlyRT.setSize(size.x, size.y)
         this.cssRenderer.setSize(size.x, size.y)
         this.windowSize = size
         this.windowSizeVersion++
