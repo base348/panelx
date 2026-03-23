@@ -199,7 +199,7 @@ export class SomeModel extends Model {
 
 然后在 `src/framework/model/registerBuiltins.ts` 注册时把 `supportedProps` 传进去（编辑器用于生成右侧字段列表）。
 
-内置示例：**`tech-pedestal`（科技底座）** — 下层半透明平面 + 上层薄立方体台面、亮蓝线框边，配色与透明度可调（实现见 `src/framework/models/TechPedestalModel.ts`）。
+内置示例：**`tech-pedestal`（科技底座）** — 上层基色默认 `#0a1a2f`、`topOpacity` 默认 **0.85**，顶面 **科技网格**（`topGridColor` 默认 `#41A9FF`，中心更亮）；下层外轮廓 **`#00D8FF`**；线框/网格/流光 **透明混合**，且默认同时走 **default + Bloom 层**（`bloomEdges`，霓虹泛光需场景 Bloom + 相机勾选 Bloom 层）。其余见 `supportedProps`（实现见 `src/framework/models/TechPedestalModel.ts`）。
 
 **性能（Configurable vs Editor3D）**：大屏 `Scene3DFramework` 曾默认带「星空粒子」装饰，而 Editor3D 无此层，导致可配置运行时 GPU/CPU 反而更高。现已改为仅在 `scene3D.starField === true` 时启用；默认与编辑器一致（不启用）。粒子仅在 **XZ 平面**（固定 `Y`，约 **80** 个 `Points`），带固定方向缓慢漂移与少数闪烁；初始亮度按约 **亮:暗 = 1:6** 随机（多数为暗点）；尺寸按 **大:小数量 ≈ 1:6** 分两套 `Points`（大点与小点不同像素 `size`），不占满 Y 向体积。`statsStyle === 0` 时不再每帧执行 Stats 面板内部计时，降低默认开销。
 
