@@ -50,9 +50,9 @@ import type {
   BackgroundLayerImage
 } from '../types/dashboard'
 import type { DesignRect } from '../types/size'
-import type { DataSourceConfig, SSESourceConfig } from '../types/comm'
-import { SSESource } from '../core/comm/SSESource'
-import { PollingSource } from '../core/comm/PollingSource'
+import type { BackendDataSourceConfig, CommandRequest, ControlAction, ControlDomain, ControlPayload, PropertyRequest } from '../types'
+import { PollingSource, SSESource, globalDatasourceRegistry, toControlEnvelope } from '../utils/controlSources'
+import { SceneControlStreamEngine } from '../utils/SceneControlStreamEngine'
 import {
   WidgetDataKey,
   SetWidgetDataKey,
@@ -64,15 +64,14 @@ import { dataChainLog } from '../core/comm/dataChainLog'
 import Scene3DFramework from './Scene3DFramework.vue'
 import { getWidgetComponent } from '../widgets'
 import { widgets3DToScene3DConfig } from '../utils/widgets3DToScene3D'
-import type { CommandRequest, PropertyRequest } from '../types'
 import type { BackgroundLayerConfig } from '../types/dashboard'
 
 const scene3dBgRef = ref<any>(null)
 
 const props = defineProps<{
   config: DashboardConfig
-  /** 数据源列表（与 editor_config.datasources 一致）；传入后会按 widget 的 datasourceKey/logicCode 绑定并推送数据 */
-  datasources?: DataSourceConfig[]
+  /** 数据源列表（与 editor_config.datasources 一致）；仅一个 enable=true 生效，优先按 payload.widgetId/id 定位 */
+  datasources?: BackendDataSourceConfig[]
 }>()
 
 const config = computed(() => props.config)
@@ -179,86 +178,250 @@ provide(UpdateWidgetDataKey, updateWidgetData)
 provide(UpdateWidgetKey, updateWidget)
 provide(WidgetRefreshVersionKey, widgetRefreshVersion)
 
-/** 数据源实例与取消订阅句柄，用于 connector 的清理 */
-const dataSourceInstances = ref<Map<string, { start: () => void; stop: () => void }>>(new Map())
-const dataSourceUnsubs = ref<(() => void)[]>([])
+/** Dashboard 后端数据统一入口：所有后端数据必须经 dataEngine。 */
+const dataEngine = new SceneControlStreamEngine(undefined, undefined, {
+  widgetSink: (payload) => {
+    updateWidgetData(payload.widgetId, payload.patch)
+    if (payload.refresh !== false) updateWidget(payload.widgetId)
+  },
+  commandSink: (request) => scene3dBgRef.value?.executeCommand?.(request),
+  propertySink: (request) => scene3dBgRef.value?.executeProperty?.(request)
+})
+const dashboardOwnerId = `dashboard_${Math.random().toString(36).slice(2)}`
+const retainedDatasourceKeys = new Set<string>()
+const engineSourceIds = new Set<string>()
+const sourceUnsubs = new Map<string, () => void>()
 
-/** 将 config.widgets2D 中带 datasourceKey/logicCode 的 widget 绑定到 datasources，收到数据后调用 updateWidgetData */
-function setupDataSourceConnector() {
-  dataSourceUnsubs.value.forEach((fn) => fn())
-  dataSourceUnsubs.value = []
-  dataSourceInstances.value.forEach((inst) => inst.stop())
-  dataSourceInstances.value.clear()
+function parseRouteToken(token: string): { domain: ControlDomain; action: ControlAction } | null {
+  const t = String(token ?? '').trim().toLowerCase()
+  const [d, a] = t.split('_')
+  const domain = d === '2d' || d === '3d' ? d : null
+  const action = a === 'command' || a === 'property' || a === 'chart' || a === 'other' ? a : null
+  if (!domain || !action) return null
+  return { domain, action }
+}
+
+function toPayloadByRoute(widget: WidgetConfig2D, route: { domain: ControlDomain; action: ControlAction }, data: unknown): ControlPayload | null {
+  if (route.domain === '2d') {
+    const patch =
+      route.action === 'chart' || widget.type === 'chart' || widget.type === 'glassChart'
+        ? ({ options: data } as Record<string, unknown>)
+        : ((data as Record<string, unknown>) ?? {})
+    return { kind: 'widget', widgetId: widget.id, patch, refresh: true }
+  }
+  if (route.action === 'command') {
+    const req = data as { key?: unknown; id?: unknown; params?: unknown }
+    const key = String(req?.key ?? '').trim()
+    const id = String(req?.id ?? '').trim()
+    if (!key || !id) return null
+    return { kind: 'command', request: { key, id, params: req?.params } }
+  }
+  if (route.action === 'property') {
+    const req = data as { key?: unknown; id?: unknown; params?: unknown }
+    const key = String(req?.key ?? '').trim()
+    const id = String(req?.id ?? '').trim()
+    if (!key || !id) return null
+    return { kind: 'property', request: { key, id, params: req?.params } }
+  }
+  return null
+}
+
+type RoutedSourceData = {
+  targetId?: string
+  route: { domain: ControlDomain; action: ControlAction }
+  data: unknown
+}
+
+function normalizePath(path: string): string {
+  const p = path.trim()
+  if (!p) return ''
+  if (/^https?:\/\//i.test(p)) return p
+  return p.startsWith('/') ? p : `/${p}`
+}
+
+function resolveDatasourceUrl(dsConfig: BackendDataSourceConfig): string {
+  const rawUrl = String(dsConfig.url ?? '').trim()
+  if (rawUrl) return rawUrl
+
+  const fallbackPath = dsConfig.type === 'sse' ? '/api/sse' : '/api/stats'
+  const path = normalizePath(String(dsConfig.path ?? fallbackPath))
+  const host = String(dsConfig.host ?? '').trim()
+  if (!host) return path
+  const h = host.endsWith('/') ? host.slice(0, -1) : host
+  return `${h}${path}`
+}
+
+function buildDatasourceHash(dsConfig: BackendDataSourceConfig): string {
+  return JSON.stringify(dsConfig)
+}
+
+async function ensureGlobalDatasource(dsConfig: BackendDataSourceConfig): Promise<void> {
+  const hash = buildDatasourceHash(dsConfig)
+  if (dsConfig.type === 'sse') {
+    await globalDatasourceRegistry.getOrCreate(
+      dsConfig.key,
+      () => {
+        let source: SSESource | null = null
+        return {
+          start: async (emit) => {
+            source = new SSESource({
+              sourceId: dsConfig.key,
+              url: resolveDatasourceUrl(dsConfig),
+              parseMessage: (message) => {
+                let parsed: unknown
+                try {
+                  parsed = JSON.parse(message.data)
+                } catch {
+                  parsed = null
+                }
+                if (!parsed) return []
+                const list = Array.isArray(parsed) ? parsed : [parsed]
+                const out: RoutedSourceData[] = []
+                for (const item of list) {
+                  const rec = item as Record<string, unknown>
+                  const targetId = String(rec.widgetId ?? rec.id ?? '').trim()
+                  const route = parseRouteToken(String(rec.event ?? ''))
+                  if (!targetId || !route) continue
+                  out.push({ targetId, route, data: rec.payload })
+                }
+                return out.map((it) => ({
+                  header: { domain: it.route.domain, action: it.route.action },
+                  payload: { kind: 'widget', widgetId: '__route_only__', patch: { __routed: it } }
+                }))
+              }
+            })
+            await source.start((env) => emit((env as any).payload.patch.__routed as RoutedSourceData))
+          },
+          stop: async () => {
+            await source?.stop()
+            source = null
+          }
+        }
+      },
+      hash
+    )
+  } else {
+    await globalDatasourceRegistry.getOrCreate(
+      dsConfig.key,
+      () => {
+        let source: PollingSource | null = null
+        return {
+          start: async (emit) => {
+            source = new PollingSource({
+              sourceId: dsConfig.key,
+              url: resolveDatasourceUrl(dsConfig),
+              intervalMs: dsConfig.interval ?? 1000,
+              init: {
+                method: dsConfig.method ?? 'GET',
+                body: dsConfig.body ? JSON.stringify(dsConfig.body) : undefined,
+                headers: dsConfig.body ? { 'Content-Type': 'application/json' } : undefined
+              },
+              parseResponse: (body) => {
+                const rec = (body ?? {}) as Record<string, unknown>
+                const out: RoutedSourceData[] = []
+                const list = Array.isArray(body) ? body : Object.values(rec)
+                for (const raw of list) {
+                  if (!raw || typeof raw !== 'object') continue
+                  const obj = raw as Record<string, unknown>
+                  const route = parseRouteToken(`${obj.domain ?? '2d'}_${obj.action ?? 'other'}`)
+                  const targetId = String(obj.widgetId ?? obj.id ?? '').trim()
+                  if (!route || !targetId) continue
+                  out.push({ targetId, route, data: obj.payload })
+                }
+                return out.map((it) => ({
+                  header: { domain: it.route.domain, action: it.route.action },
+                  payload: { kind: 'widget', widgetId: '__route_only__', patch: { __routed: it } }
+                }))
+              }
+            })
+            await source.start((env) => emit((env as any).payload.patch.__routed as RoutedSourceData))
+          },
+          stop: async () => {
+            await source?.stop()
+            source = null
+          }
+        }
+      },
+      hash
+    )
+  }
+  if (!retainedDatasourceKeys.has(dsConfig.key)) {
+    globalDatasourceRegistry.retain(dsConfig.key, dashboardOwnerId)
+    retainedDatasourceKeys.add(dsConfig.key)
+  }
+}
+
+async function cleanupConnectorState(): Promise<void> {
+  dataEngine.stop()
+  for (const sourceId of [...engineSourceIds]) {
+    await dataEngine.unregisterSource(sourceId)
+  }
+  engineSourceIds.clear()
+  for (const unsub of sourceUnsubs.values()) unsub()
+  sourceUnsubs.clear()
+  for (const key of [...retainedDatasourceKeys]) {
+    await globalDatasourceRegistry.release(key, dashboardOwnerId)
+    retainedDatasourceKeys.delete(key)
+  }
+}
+
+function pickActiveDatasource(list: BackendDataSourceConfig[]): BackendDataSourceConfig | null {
+  const enabled = list.filter((d) => d.enable === true)
+  if (enabled.length > 1) {
+    dataChainLog('Dashboard.connector.error', {
+      reason: 'multiple datasource enabled',
+      keys: enabled.map((d) => d.key)
+    })
+    return enabled[0] ?? null
+  }
+  if (enabled.length === 1) return enabled[0]
+  return list[0] ?? null
+}
+
+/** 将 config.widgets2D 绑定到活动 datasource：按 targetId(=widgetId/id) 路由 */
+async function setupDataSourceConnector() {
+  await cleanupConnectorState()
 
   const list = props.datasources ?? []
+  const activeDatasource = pickActiveDatasource(list)
   const widgets = config.value.widgets2D ?? []
-  const bound = widgets.filter(
-    (w) => w.datasourceKey && w.logicCode
-  ) as (WidgetConfig2D & { datasourceKey: string; logicCode: string })[]
-  if (list.length === 0 || bound.length === 0) return
-
-  const sources = new Map<string, { start: () => void; stop: () => void }>()
-  const unsubs: (() => void)[] = []
-
-  for (const w of bound) {
-    const dsConfig = list.find((d) => d.key === w.datasourceKey)
-    if (!dsConfig) {
-      dataChainLog('Dashboard.connector.skip', { reason: 'datasource not found', datasourceKey: w.datasourceKey })
-      continue
-    }
-    if (dsConfig.type === 'sse') {
-      const sseConfig = dsConfig as SSESourceConfig
-      let source = sources.get(dsConfig.key) as SSESource<unknown> | undefined
-      if (!source) {
-        source = new SSESource(sseConfig)
-        sources.set(dsConfig.key, source)
-      }
-      const eventName = sseConfig.eventByLogicCode?.[w.logicCode] ?? w.logicCode
-      const unsub = source.onEvent(eventName, (data) => {
-        const patch =
-          w.type === 'chart' || w.type === 'glassChart'
-            ? { options: data }
-            : (data as Record<string, unknown>)
-        updateWidgetData(w.id, patch)
-        updateWidget(w.id)
-      })
-      unsubs.push(unsub)
-      dataChainLog('Dashboard.connector.bind', {
-        widgetId: w.id,
-        type: w.type,
-        datasourceKey: w.datasourceKey,
-        logicCode: w.logicCode,
-        eventName
-      })
-    } else if (dsConfig.type === 'polling') {
-      let source = sources.get(dsConfig.key) as PollingSource<unknown> | undefined
-      if (!source) {
-        source = new PollingSource(dsConfig)
-        sources.set(dsConfig.key, source)
-      }
-      const unsub = source.onDataByLogicCode(w.logicCode, (data) => {
-        const patch =
-          w.type === 'chart' || w.type === 'glassChart'
-            ? { options: data }
-            : (data as Record<string, unknown>)
-        updateWidgetData(w.id, patch)
-        updateWidget(w.id)
-      })
-      unsubs.push(unsub)
-      dataChainLog('Dashboard.connector.bind', {
-        widgetId: w.id,
-        type: w.type,
-        datasourceKey: w.datasourceKey,
-        logicCode: w.logicCode
-      })
-    }
+  const widgetById = new Map<string, WidgetConfig2D>()
+  for (const w of widgets) {
+    const wid = String(w.id ?? '').trim()
+    if (wid) widgetById.set(wid, w)
   }
+  const bound = widgets
+  if (!activeDatasource || bound.length === 0) return
 
-  sources.forEach((inst, key) => {
-    inst.start()
-    dataSourceInstances.value.set(key, inst)
+  const dsConfig = activeDatasource
+  await ensureGlobalDatasource(dsConfig)
+  const sourceId = `${dashboardOwnerId}:${dsConfig.key}:all_widgets`
+  dataEngine.registerSource({
+    id: sourceId,
+    start: async (push) => {
+      const unsub = await globalDatasourceRegistry.subscribe(dsConfig.key, (data) => {
+        const routed = data as RoutedSourceData
+        const targetWidget = routed.targetId ? widgetById.get(routed.targetId) : undefined
+        if (!targetWidget) return
+        const payload = toPayloadByRoute(targetWidget, routed.route, routed.data)
+        if (!payload) return
+        push(toControlEnvelope(sourceId, routed.route, payload))
+      })
+      sourceUnsubs.set(sourceId, unsub)
+    },
+    stop: () => {
+      const unsub = sourceUnsubs.get(sourceId)
+      unsub?.()
+      sourceUnsubs.delete(sourceId)
+    }
   })
-  dataSourceUnsubs.value = unsubs
+  engineSourceIds.add(sourceId)
+  dataChainLog('Dashboard.connector.bind', {
+    datasourceKey: dsConfig.key,
+    widgetCount: widgets.length,
+    mode: 'targetId-only'
+  })
+  void dataEngine.start()
 }
 
 const backgroundImageStyle = computed((): Record<string, string> => {
@@ -366,7 +529,7 @@ function getComponent(type: WidgetType2D) {
 
 watch(
   () => [props.config?.widgets2D?.length ?? 0, props.datasources?.length ?? 0] as const,
-  () => setupDataSourceConnector(),
+  () => void setupDataSourceConnector(),
   { immediate: true }
 )
 
@@ -386,10 +549,8 @@ onMounted(() => {
   }
 })
 onUnmounted(() => {
-  dataSourceUnsubs.value.forEach((fn) => fn())
-  dataSourceUnsubs.value = []
-  dataSourceInstances.value.forEach((inst) => inst.stop())
-  dataSourceInstances.value.clear()
+  void dataEngine.dispose()
+  void cleanupConnectorState()
   ro?.disconnect()
   roParent?.disconnect()
 })
@@ -402,9 +563,34 @@ function executeProperty(req: PropertyRequest): void {
   scene3dBgRef.value?.executeProperty?.(req)
 }
 
+function registerControlSource(source: unknown): void {
+  dataEngine.registerSource(source as any)
+}
+
+function startControlEngine(): void {
+  void dataEngine.start()
+}
+
+function stopControlEngine(): void {
+  dataEngine.stop()
+}
+
+function pauseControlEngine(): void {
+  dataEngine.pause()
+}
+
+function resumeControlEngine(): void {
+  dataEngine.resume()
+}
+
 defineExpose({
   executeCommand,
-  executeProperty
+  executeProperty,
+  registerControlSource,
+  startControlEngine,
+  stopControlEngine,
+  pauseControlEngine,
+  resumeControlEngine
 })
 </script>
 

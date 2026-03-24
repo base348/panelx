@@ -24,6 +24,12 @@
       :save-draft-to-local-storage="saveDraftToLocalStorage"
       :trigger-import-config="triggerImportConfig"
       :create-robot-demo-scene="createRobotDemoScene"
+      :open-datasource-config-page="openDatasourceConfigPage"
+      :control-engine-status="controlEngineStatus"
+      :start-control-engine="startControlEngine"
+      :stop-control-engine="stopControlEngine"
+      :pause-control-engine="pauseControlEngine"
+      :resume-control-engine="resumeControlEngine"
     />
     <input
       ref="importInputRef"
@@ -125,6 +131,9 @@ import {
   setup3D
 } from '../framework'
 import type { DashboardConfig, WidgetConfig3D, Scene3DCameraLayerItem } from '../types/dashboard'
+import type { BackendDataSourceConfig } from '../types'
+import { loadDatasourceConfigFromStorage } from '../utils/datasourceConfigStorage'
+import { isDebugEnabled } from '../utils/logManager'
 import type { PropDefinition } from '../framework'
 import type { Loader } from '../framework'
 import { Object3D, OrthographicCamera, Vector3 } from 'three'
@@ -320,6 +329,7 @@ const config = reactive<DashboardConfig>({
   widgets2D: [],
   widgets3D: []
 })
+const datasourceCatalog = ref<BackendDataSourceConfig[]>([])
 
 const widgets3D = computed(() => config.widgets3D ?? [])
 
@@ -698,6 +708,11 @@ function getEditorModelById(id: string): Model | null {
 const {
   propertyRequestJson,
   propertyRequestError,
+  controlEngineStatus,
+  startControlEngine,
+  stopControlEngine,
+  pauseControlEngine,
+  resumeControlEngine,
   executeCommand,
   executeProperty,
   cleanupEditor3DManagers
@@ -910,6 +925,13 @@ function formatWidgetScale(scale: unknown): string {
 }
 
 onMounted(async () => {
+  datasourceCatalog.value = loadDatasourceConfigFromStorage()
+  if (isDebugEnabled()) {
+    console.info('[Editor3D] datasource loaded from localStorage', {
+      count: datasourceCatalog.value.length,
+      keys: datasourceCatalog.value.map((d) => d.key)
+    })
+  }
   await nextTick()
   // 初始化 3D world：主区域容器内创建 renderer/canvas，并在资源加载完成后回调 onFrameworkLoaded
   setup3D('#panelx-editor3d-world', onFrameworkLoaded, () => [])
@@ -930,10 +952,18 @@ onUnmounted(() => {
 
 /** 构建与「导出 JSON」一致的 Dashboard 片段（仅含 3D 相关字段 + design 供对齐），供文件下载与 localStorage 草稿共用 */
 function buildDashboardExportPayload(): DashboardConfig {
+  datasourceCatalog.value = loadDatasourceConfigFromStorage()
+  if (isDebugEnabled()) {
+    console.info('[Editor3D] datasource merged on export', {
+      count: datasourceCatalog.value.length,
+      keys: datasourceCatalog.value.map((d) => d.key)
+    })
+  }
   const store = loaderRef.value?.getStore()
   const payload: DashboardConfig = {
     design: { ...config.design },
     widgets2D: [],
+    datasources: datasourceCatalog.value.map((d) => ({ ...d })),
     widgets3D: config.widgets3D?.length
       ? (config.widgets3D as WidgetConfig3D[]).map((w) => {
           const props = { ...(w.props ? { ...w.props } : {}) } as Record<string, unknown>
@@ -1002,6 +1032,10 @@ function exportConfig() {
 /** 保存当前 3D 配置到 localStorage，供 Editor2D 在「合并 3D」导出时使用 */
 function saveDraftToLocalStorage() {
   saveEditor3DDraft(buildDashboardExportPayload())
+}
+
+function openDatasourceConfigPage(): void {
+  window.open('/datasources', '_blank', 'noopener')
 }
 </script>
 

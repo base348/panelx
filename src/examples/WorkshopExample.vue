@@ -15,10 +15,10 @@ import { Dashboard } from '../components'
 import { convertDashboardConfigPxToPercent } from '../core/size'
 import { setDebugFromConfig } from '../utils/logManager'
 import type { DashboardConfig } from '../types/dashboard'
-import type { DataSourceConfig } from '../types/comm'
+import type { BackendDataSourceConfig } from '../types'
 
 defineProps<{
-  datasources?: DataSourceConfig[]
+  datasources?: BackendDataSourceConfig[]
 }>()
 
 /** 车间大屏配置：先空白，由异步加载 JSON（模拟 API）填充 */

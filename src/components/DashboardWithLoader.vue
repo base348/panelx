@@ -22,7 +22,7 @@
       </div>
     </template>
     <div v-else class="panelx-dashboard-with-loader-wrap">
-      <Dashboard ref="dashboardRef" :config="runtimeConfig" :datasources="editorDatasources" />
+      <Dashboard ref="dashboardRef" :config="runtimeConfig" :datasources="effectiveDatasources" />
     </div>
   </div>
 </template>
@@ -33,8 +33,8 @@ import Dashboard from './Dashboard.vue'
 import { convertDashboardConfigPxToPercent } from '../core/size'
 import { setDebugFromConfig } from '../utils/logManager'
 import type { DashboardConfig } from '../types/dashboard'
-import type { DataSourceConfig } from '../types/comm'
-import type { CommandRequest, PropertyRequest } from '../types'
+import type { BackendDataSourceConfig, CommandRequest, PropertyRequest } from '../types'
+import { loadDatasourceConfigFromStorage } from '../utils/datasourceConfigStorage'
 
 const props = withDefaults(
   defineProps<{
@@ -49,17 +49,11 @@ const props = withDefaults(
 const loadFrom = computed(() => props.loadFrom ?? 'file')
 
 const configLoaded = ref(false)
-/** 数据源列表（从 editor_config 加载），供绑定 datasourceKey 的 widget 使用 */
-const editorDatasources = ref<DataSourceConfig[]>([])
+/** 数据源列表（从 localStorage 加载），供 Dashboard 选择活动 datasource 使用 */
+const editorDatasources = ref<BackendDataSourceConfig[]>([])
 
 onMounted(async () => {
-  try {
-    const mod = await import('../editor/editor_config.json')
-    const loaded = mod.default as { datasources?: DataSourceConfig[] }
-    if (loaded?.datasources?.length) editorDatasources.value = loaded.datasources
-  } catch {
-    // 无 editor_config 时无数据源
-  }
+  editorDatasources.value = loadDatasourceConfigFromStorage()
 
   if (loadFrom.value === 'localStorage') {
     const cfg = readConfigFromLocalStorage(props.storageKey)
@@ -141,13 +135,22 @@ function readConfigFromLocalStorage(key: string | undefined): DashboardConfig | 
 const runtimeConfig = computed(() =>
   convertDashboardConfigPxToPercent({ ...dashboardConfig.value })
 )
+const effectiveDatasources = computed<BackendDataSourceConfig[]>(() => {
+  if (dashboardConfig.value.datasources?.length) return dashboardConfig.value.datasources
+  return editorDatasources.value
+})
 
 defineExpose({
   loadWorkshopConfig,
   configLoaded,
   applyConfig,
   executeCommand: (req: CommandRequest) => dashboardRef.value?.executeCommand?.(req),
-  executeProperty: (req: PropertyRequest) => dashboardRef.value?.executeProperty?.(req)
+  executeProperty: (req: PropertyRequest) => dashboardRef.value?.executeProperty?.(req),
+  registerControlSource: (source: unknown) => dashboardRef.value?.registerControlSource?.(source),
+  startControlEngine: () => dashboardRef.value?.startControlEngine?.(),
+  stopControlEngine: () => dashboardRef.value?.stopControlEngine?.(),
+  pauseControlEngine: () => dashboardRef.value?.pauseControlEngine?.(),
+  resumeControlEngine: () => dashboardRef.value?.resumeControlEngine?.()
 })
 </script>
 

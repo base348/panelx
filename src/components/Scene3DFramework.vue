@@ -34,6 +34,7 @@ import { degToRad } from '../utils/angle'
 import { clamp01, toFiniteNumber, toPositiveNumber } from '../utils/number'
 import { CommandManager } from '../utils/CommandManager'
 import { PropertyManager } from '../utils/PropertyManager'
+import { SceneControlStreamEngine } from '../utils/SceneControlStreamEngine'
 import type { CommandRequest, PropertyRequest } from '../types'
 import { register3DCommandHandlers, register3DPropertyHandlers } from '../utils/manager3DRegistry'
 import { create3DPropertyHandlers } from '../utils/manager3DHandlers'
@@ -528,6 +529,7 @@ onMounted(() => {
  */
 const commandManager = new CommandManager()
 const propertyManager = new PropertyManager()
+const controlEngine = new SceneControlStreamEngine(commandManager, propertyManager)
 
 register3DCommandHandlers(
   commandManager,
@@ -559,10 +561,16 @@ function executeProperty(req: PropertyRequest): void {
 
 defineExpose({
   executeCommand,
-  executeProperty
+  executeProperty,
+  registerControlSource: (source: Parameters<SceneControlStreamEngine['registerSource']>[0]) => controlEngine.registerSource(source),
+  startControlEngine: () => controlEngine.start(),
+  stopControlEngine: () => controlEngine.stop(),
+  pauseControlEngine: () => controlEngine.pause(),
+  resumeControlEngine: () => controlEngine.resume()
 })
 
 onUnmounted(() => {
+  void controlEngine.dispose()
   disposeStarFieldAnim?.()
   disposeStarFieldAnim = null
   starFieldPointTexture?.dispose()

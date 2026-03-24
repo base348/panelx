@@ -1,8 +1,8 @@
 {
-  "_comment": "registeredWidgets: 侧栏可拖拽组件。datasources: 数据源列表，widget 可绑定 logicCode 与 datasourceKey；SSE 用 eventByLogicCode 配置 logicCode->event。",
+  "_comment": "registeredWidgets: 侧栏可拖拽组件。datasources: 数据源列表（支持 url 或 host+path，未填 path 使用默认值），Dashboard 仅使用一个 enable=true 的数据源，统一按 payload.widgetId/id 定位实例。",
   "datasources": [
-    { "type": "sse", "key": "sse_realtime", "url": "/api/sse", "eventByLogicCode": { "chart_1": "chart_data", "table_1": "table_data" } },
-    { "type": "polling", "key": "polling_stats", "url": "/api/stats", "interval": 5000 }
+    { "type": "sse", "key": "sse_realtime", "enable": true, "host": "", "path": "/api/sse" },
+    { "type": "polling", "key": "polling_stats", "host": "", "path": "/api/stats", "interval": 5000 }
   ],
   "registeredWidgets": [
     { "type": "screenTitle", "label": "大屏标题", "defaultSize": { "width": 1920, "height": 80 }, "sampleImage": "widget_title.png" },

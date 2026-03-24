@@ -8,7 +8,7 @@ import { createServer } from 'http'
 
 const PORT = Number(process.env.SSE_PORT) || 3001
 
-/** 与 eventByLogicCode 一致：chart_1 -> chart_data, table_1 -> table_data */
+/** 示例事件名 */
 const CHART_EVENT = 'chart_data'
 const TABLE_EVENT = 'table_data'
 
@@ -41,6 +41,7 @@ const server = createServer((req, res) => {
     const chartInterval = setInterval(() => {
       chartTick += 1
       sendSSE(res, CHART_EVENT, {
+        widgetId: 'chart_1',
         xAxis: { type: 'category', data: ['1月', '2月', '3月', '4月', '5月', '6月'] },
         yAxis: { type: 'value' },
         series: [
@@ -53,6 +54,7 @@ const server = createServer((req, res) => {
     const tableInterval = setInterval(() => {
       tableTick += 1
       sendSSE(res, TABLE_EVENT, {
+        widgetId: 'table_1',
         columns: [{ key: 'name', title: '名称' }, { key: 'value', title: '数值' }],
         data: [
           { name: '项目A', value: 100 + tableTick },

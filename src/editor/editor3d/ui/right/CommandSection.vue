@@ -135,7 +135,6 @@ const anchorWidgetId = defineModel<string | null>('anchorWidgetId', { required: 
 let autoRotateCmd = defineModel<AutoRotateCmd>('autoRotateCmd', { required: true })
 const propertyRequestJson = defineModel<string>('propertyRequestJson', { required: true })
 const propertyRequestError = defineModel<string>('propertyRequestError', { required: true })
-
 defineProps({
   widgets3D: { type: Array as PropType<WidgetLike[]>, required: true },
   onExecuteCommand: { type: Function as PropType<(req: CommandRequest) => void>, required: true },

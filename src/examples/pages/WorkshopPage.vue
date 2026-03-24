@@ -7,18 +7,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import WorkshopExample from '../WorkshopExample.vue'
-import type { DataSourceConfig } from '../../types/comm'
+import type { BackendDataSourceConfig } from '../../types'
+import { loadDatasourceConfigFromStorage } from '../../utils/datasourceConfigStorage'
 
-const datasources = ref<DataSourceConfig[]>([])
+const datasources = ref<BackendDataSourceConfig[]>([])
 
 onMounted(async () => {
-  try {
-    const mod = await import('../../editor/editor_config.json')
-    const loaded = mod.default as { datasources?: DataSourceConfig[] }
-    if (loaded?.datasources?.length) datasources.value = loaded.datasources
-  } catch {
-    // ignore
-  }
+  datasources.value = loadDatasourceConfigFromStorage()
   if (typeof document !== 'undefined') document.title = '工车间数字化大屏'
 })
 </script>

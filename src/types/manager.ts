@@ -24,3 +24,78 @@ export type PropertyJsonExecuteRequest = {
   json?: string
 }
 
+export type ControlDomain = '2d' | '3d'
+export type ControlAction = 'command' | 'property' | 'chart' | 'other'
+
+export type ControlHeader = {
+  domain: ControlDomain
+  action: ControlAction
+}
+
+/**
+ * 统一控制载荷：用于流引擎内部分发到 CommandManager / PropertyManager。
+ */
+export type ControlPayload =
+  | { kind: 'command'; request: CommandRequest }
+  | { kind: 'property'; request: PropertyRequest }
+  | { kind: 'widget'; widgetId: string; patch: Record<string, unknown>; refresh?: boolean }
+
+/**
+ * 流引擎统一消息壳：便于跟踪来源、时间与链路。
+ */
+export type ControlEnvelope = {
+  sourceId: string
+  timestamp: number
+  traceId?: string
+  priority?: number
+  header: ControlHeader
+  payload: ControlPayload
+}
+
+export type ControlSourceStatus = 'idle' | 'running' | 'stopped' | 'error'
+export type ControlPush = (event: ControlEnvelope) => void
+
+/**
+ * 控制数据源接口：start 后持续通过 push 输出事件，stop 停止输出。
+ */
+export type ControlSource = {
+  id: string
+  start: (push: ControlPush) => void | Promise<void>
+  stop: () => void | Promise<void>
+  status?: () => ControlSourceStatus
+}
+
+export type BackendDataSourceType = 'polling' | 'sse'
+
+export type BackendDataSourceBaseConfig = {
+  type: BackendDataSourceType
+  key: string
+  /** Dashboard 运行时仅允许一个数据源 enable=true */
+  enable?: boolean
+}
+
+export type BackendPollingSourceConfig = BackendDataSourceBaseConfig & {
+  type: 'polling'
+  /** 完整 URL（优先级高于 host/path） */
+  url?: string
+  /** 主机地址，如 https://api.example.com；不填默认当前 origin */
+  host?: string
+  /** 接口路径，如 /api/stats；不填使用默认值 */
+  path?: string
+  interval?: number
+  method?: 'GET' | 'POST'
+  body?: Record<string, unknown>
+}
+
+export type BackendSSESourceConfig = BackendDataSourceBaseConfig & {
+  type: 'sse'
+  /** 完整 URL（优先级高于 host/path） */
+  url?: string
+  /** 主机地址，如 https://api.example.com；不填默认当前 origin */
+  host?: string
+  /** SSE 路径，如 /api/sse；不填使用默认值 */
+  path?: string
+}
+
+export type BackendDataSourceConfig = BackendPollingSourceConfig | BackendSSESourceConfig
+

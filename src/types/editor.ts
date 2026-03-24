@@ -1,5 +1,5 @@
 import type { WidgetType2D } from './dashboard'
-import type { DataSourceConfig } from './comm'
+import type { BackendDataSourceConfig } from './manager'
 
 /** 编辑器可注册的单个 widget 定义 */
 export interface RegisteredWidgetDef {
@@ -34,5 +34,5 @@ export interface EditorConfig {
   /** 可选：prop 数据（默认参数 + 预留 dashboard 数据） */
   widgetPropData?: WidgetPropData
   /** 可选：数据源列表，供 widget 绑定（逻辑编号 <-> SSE event / Polling 响应 key） */
-  datasources?: DataSourceConfig[]
+  datasources?: BackendDataSourceConfig[]
 }

@@ -7,6 +7,8 @@ import { PropertyManager } from '../../utils/PropertyManager'
 import { create3DCommandHandlers } from '../../utils/manager3DCommandHandlers'
 import { create3DPropertyHandlers } from '../../utils/manager3DHandlers'
 import { register3DCommandHandlers, register3DPropertyHandlers } from '../../utils/manager3DRegistry'
+import { SceneControlStreamEngine } from '../../utils/SceneControlStreamEngine'
+import { SpawnSource } from '../../utils/controlSources'
 
 type AutoRotatePayload = { enabled: boolean; axis: 'x' | 'y' | 'z'; speedDeg: number }
 
@@ -38,6 +40,29 @@ export function useEditor3DManagers(options: UseEditor3DManagersOptions) {
   )
 
   register3DPropertyHandlers(propertyManager, create3DPropertyHandlers(options.getModelById))
+  const controlEngine = new SceneControlStreamEngine(commandManager, propertyManager)
+  const controlEngineStatus = ref(controlEngine.getStatus())
+
+  const demoSource = new SpawnSource({
+    sourceId: 'editor-demo-auto-rotate',
+    intervalMs: 2000,
+    produce: () => ({
+      header: { domain: '3d', action: 'command' },
+      payload: {
+        kind: 'command',
+        request: {
+          key: 'editor3d.applyAutoRotateToSelected',
+          id: 'demo-robot',
+          params: { enabled: true, axis: 'y', speedDeg: 30 }
+        }
+      }
+    })
+  })
+  controlEngine.registerSource(demoSource)
+
+  function syncEngineStatus(): void {
+    controlEngineStatus.value = controlEngine.getStatus()
+  }
 
   function executeCommand(req: CommandRequest): void {
     commandManager.execute(req)
@@ -84,11 +109,43 @@ export function useEditor3DManagers(options: UseEditor3DManagersOptions) {
       clearTimeout(propertyRequestErrorTimer)
       propertyRequestErrorTimer = null
     }
+    void controlEngine.dispose()
+    syncEngineStatus()
+  }
+
+  async function startControlEngine(): Promise<void> {
+    await controlEngine.start()
+    syncEngineStatus()
+  }
+
+  function stopControlEngine(): void {
+    controlEngine.stop()
+    syncEngineStatus()
+  }
+
+  function pauseControlEngine(): void {
+    controlEngine.pause()
+    syncEngineStatus()
+  }
+
+  function resumeControlEngine(): void {
+    controlEngine.resume()
+    syncEngineStatus()
+  }
+
+  function registerControlSource(source: Parameters<SceneControlStreamEngine['registerSource']>[0]): void {
+    controlEngine.registerSource(source)
   }
 
   return {
     propertyRequestJson,
     propertyRequestError,
+    controlEngineStatus,
+    startControlEngine,
+    stopControlEngine,
+    pauseControlEngine,
+    resumeControlEngine,
+    registerControlSource,
     executeCommand,
     executeProperty,
     cleanupEditor3DManagers

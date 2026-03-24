@@ -30,6 +30,11 @@ const router = createRouter({
       path: '/configurable',
       name: 'configurable',
       component: () => import('../examples/pages/ConfigurablePage.vue')
+    },
+    {
+      path: '/datasources',
+      name: 'datasourceConfig',
+      component: () => import('../examples/pages/DatasourceConfigPage.vue')
     }
   ]
 })

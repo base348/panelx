@@ -6,7 +6,7 @@ export class SSESource<T = unknown> implements DataSource<T> {
   private config: SSESourceConfig
   private eventSource: EventSource | null = null
   private listeners: Array<(data: T) => void> = []
-  /** 按事件类型订阅：eventType -> callbacks，用于与 widget 的 logicCode 绑定（eventByLogicCode） */
+  /** 按事件类型订阅：eventType -> callbacks */
   private eventListeners: Map<string, Array<(data: T) => void>> = new Map()
 
   constructor(config: SSESourceConfig) {
@@ -74,7 +74,7 @@ export class SSESource<T = unknown> implements DataSource<T> {
     }
   }
 
-  /** 按 SSE 事件类型订阅，用于 logicCode 与 event 绑定：eventByLogicCode[logicCode] === eventType */
+  /** 按 SSE 事件类型订阅 */
   onEvent(eventType: string, callback: (data: T) => void): () => void {
     if (!this.eventListeners.has(eventType)) {
       this.eventListeners.set(eventType, [])

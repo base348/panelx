@@ -430,6 +430,223 @@ pm.execute({
 {"key":"model.visible","id":"model-xxx","params":{"visible":true}}
 ```
 
+## SceneControlStreamEngine（流式控制引擎）
+
+`SceneControlStreamEngine` 位于 `src/utils/SceneControlStreamEngine.ts`，用于持续消费外部数据源事件，并分发到 `CommandManager` / `PropertyManager`。
+
+- **核心价值**：把一次性 `executeCommand/executeProperty` 升级为持续数据流控制。
+- **统一事件模型**：`ControlEnvelope -> ControlPayload -> request`。
+- **固定外层协议**：`header(domain/action) + payload`，其中 `domain=2d|3d`，`action=command|property|chart|other`。
+- **生命周期**：`registerSource` / `start` / `pause` / `resume` / `stop` / `dispose`。
+- **调度策略**：FIFO 单线程分发，支持 `maxQueueSize` 与丢弃策略。
+- **Datasource 单例**：同一浏览器 Tab 内按 `datasource.key` 全局唯一。
+
+### Source 适配器
+
+目录：`src/utils/controlSources/`
+
+- `SpawnSource`：本地定时/生成器持续产出控制事件。
+- `PollingSource`：轮询 HTTP 接口并映射成事件。
+- `SSESource`：订阅 SSE 并自动重连。
+- `normalizers`：将外部原始消息归一化为 `ControlEnvelope`。
+
+说明：
+
+- 路由解析在各 datasource 内完成（例如 SSE 通过 `event` 解析 `domain/action`）。
+- `NormalizeLayer` 只负责结构校验与补全元数据，不做路由语义推断。
+
+### 最小接入示例
+
+```ts
+import { SpawnSource } from '@/utils/controlSources'
+
+// 由 Dashboard 维护统一 dataEngine，这里不直接 new engine
+// dashboardRef: Dashboard / DashboardWithLoader 的组件 ref
+dashboardRef.registerControlSource(
+  new SpawnSource({
+    sourceId: 'demo',
+    intervalMs: 1000,
+    produce: () => ({
+      header: { domain: '3d', action: 'command' },
+      payload: {
+        kind: 'command',
+        request: { key: 'editor3d.rotateTo', id: 'model-1', params: { x: 0, y: 45, z: 0 } }
+      }
+    })
+  })
+)
+dashboardRef.startControlEngine()
+```
+
+说明（重要）：
+
+- 不建议在业务侧手动 `new SceneControlStreamEngine`。
+- engine 由 `Dashboard` 统一托管，保证后端数据入口唯一、队列与生命周期统一治理。
+- 若外部重复创建 engine，可能导致同一后端流被重复消费，出现重复执行、状态抖动与调试困难。
+
+### Polling 接入示例
+
+```ts
+import { PollingSource } from '@/utils/controlSources'
+
+dashboardRef.registerControlSource(
+  new PollingSource({
+    sourceId: 'polling-device-state',
+    url: '/api/device/control-events',
+    intervalMs: 1000,
+    parseResponse: (data) => {
+      // 兼容后端返回单条或数组
+      return Array.isArray(data) ? data : [data]
+    }
+  })
+)
+```
+
+后端返回体建议统一为以下任一格式：
+
+```json
+{ "kind": "command", "request": { "key": "editor3d.moveTo", "id": "robot-1", "params": { "x": 10, "y": 0, "z": 8 } } }
+```
+
+```json
+{ "kind": "property", "request": { "key": "model.visible", "id": "robot-1", "params": { "visible": true } } }
+```
+
+### SSE 接入示例
+
+```ts
+import { SSESource } from '@/utils/controlSources'
+
+dashboardRef.registerControlSource(
+  new SSESource({
+    sourceId: 'sse-control-events',
+    url: '/api/stream/control',
+    reconnectMs: 1000,
+    maxReconnectMs: 15000,
+    parseMessage: (msg) => {
+      // 默认也会尝试 JSON.parse，这里示例按业务字段拆分
+      const parsed = JSON.parse(msg.data) as { events?: unknown[] }
+      return parsed.events ?? []
+    }
+  })
+)
+```
+
+Runtime 外部调用（`DashboardWithLoader`）：
+
+```ts
+dashboardRef.startControlEngine()
+dashboardRef.pauseControlEngine()
+dashboardRef.resumeControlEngine()
+dashboardRef.stopControlEngine()
+```
+
+### 后端事件字段规范（建议）
+
+统一按 `ControlEnvelope` 语义提供。当前采用 **实例 ID 路由**，不再使用 `logicCode`。
+
+2D（`header.domain = '2d'`）最小字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `event` | `string` | 是 | 路由标识，格式建议 `2d_chart` / `2d_other` |
+| `payload.widgetId` | `string` | 是 | 目标 2D 组件实例 id（可用 `payload.id` 兼容） |
+| `payload.payload` | `object` | 是 | 业务数据（图表 options 或普通 patch） |
+
+3D（`header.domain = '3d'`）最小字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `kind` | `'command' \| 'property'` | 是 | 事件类型，决定走哪个 manager |
+| `request.key` | `string` | 是 | handler key，如 `editor3d.moveTo` / `model.visible` |
+| `request.id` | `string` | 是 | 模型实例 id（必须与场景实例一致） |
+| `request.params` | `object` | 否 | 业务参数；不同 key 结构不同 |
+| `sourceId` | `string` | 否 | 来源标识；为空时由 source 配置补齐 |
+| `timestamp` | `number` | 否 | 事件时间戳（ms）；为空时默认 `Date.now()` |
+| `traceId` | `string` | 否 | 链路追踪 id，便于跨系统排障 |
+| `priority` | `number` | 否 | 优先级（V1 预留字段，当前按 FIFO 消费） |
+
+批量事件建议：
+
+- polling 接口支持返回数组，元素包含 `id/widgetId + domain/action + payload`
+- SSE 建议按单条 event 发送；如需批量，建议字段 `events: []` 并在 `parseMessage` 展开
+- Dashboard 内所有后端数据都必须先进入 dataEngine，再路由到 2D widget 或 3D manager。
+
+### Datasource 全局单例策略
+
+- 作用域：浏览器 Tab 内全局唯一（`GlobalDatasourceRegistry`）。
+- 冲突策略：`last-wins`（同 key 配置变化时，后注册覆盖前注册）。
+- 生命周期：通过 `retain/release` 引用计数管理，最后一个 owner 释放后自动 `stop` 并回收。
+- 行为约束：datasource 只负责获取和解析统一 envelope，业务执行只走 dataEngine，不允许旁路。
+- Dashboard 约束：全局 datasource 仅允许一个 `enable=true` 生效；若未显式启用，则回退使用第一个 datasource。
+
+### Datasource 地址配置（部署友好）
+
+- 支持两种写法（优先级从高到低）：
+  1. `url`（完整地址，优先使用）
+  2. `host + path`（推荐部署方式）
+- 默认值：
+  - `sse.path` 默认 `/api/sse`
+  - `polling.path` 默认 `/api/stats`
+  - `host` 为空时默认当前站点 origin（即使用相对路径）
+
+示例：
+
+```json
+{
+  "type": "polling",
+  "key": "polling_stats",
+  "host": "https://api.example.com",
+  "path": "/v1/stats",
+  "interval": 5000
+}
+```
+
+多环境模板（示例）：
+
+```json
+{
+  "datasources": [
+    { "type": "sse", "key": "sse_realtime", "host": "http://localhost:8080", "path": "/api/sse" },
+    { "type": "polling", "key": "polling_stats", "host": "http://localhost:8080", "path": "/api/stats", "interval": 3000 }
+  ]
+}
+```
+
+```json
+{
+  "datasources": [
+    { "type": "sse", "key": "sse_realtime", "host": "https://staging-api.example.com", "path": "/stream/sse" },
+    { "type": "polling", "key": "polling_stats", "host": "https://staging-api.example.com", "path": "/v1/stats", "interval": 5000 }
+  ]
+}
+```
+
+```json
+{
+  "datasources": [
+    { "type": "sse", "key": "sse_realtime", "host": "https://api.example.com", "path": "/stream/sse" },
+    { "type": "polling", "key": "polling_stats", "host": "https://api.example.com", "path": "/v1/stats", "interval": 5000 }
+  ]
+}
+```
+
+### Editor / Runtime datasource 优先级
+
+- Editor2D 与 Editor3D 导出 `DashboardConfig` 时，会将 `editor_config.json` 的 `datasources` 写入 `config.datasources`。
+- Runtime（`DashboardWithLoader`）消费优先级：
+  1. 优先使用 `config.datasources`
+  2. 若为空，再回退到本地 `editor_config.json.datasources`
+- 推荐实践：生产配置始终显式携带 `datasources`，避免依赖运行环境中的 fallback 文件。
+
+### 排错清单（source 有数据但模型不动）
+
+1. `request.key` 是否已在 manager 注册（`missing_handler` 日志）。
+2. `request.id` 是否是场景内真实模型实例 id。
+3. source 是否进入 `running` 状态。
+4. 队列是否过载触发丢弃（查看 `droppedCount`）。
+5. manager 执行是否报错（`execute_error` 日志）。
+
 ## 请求 Key 对照表（UI -> 执行）
 
 ### Command（`executeCommand`）

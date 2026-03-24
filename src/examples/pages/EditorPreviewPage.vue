@@ -13,12 +13,13 @@
 import { ref, onMounted } from 'vue'
 import { Dashboard } from '../../components'
 import type { DashboardConfig } from '../../types/dashboard'
-import type { DataSourceConfig } from '../../types/comm'
+import type { BackendDataSourceConfig } from '../../types'
+import { loadDatasourceConfigFromStorage } from '../../utils/datasourceConfigStorage'
 
 const PREVIEW_STORAGE_KEY = 'PanelX_EDITOR_PREVIEW_CONFIG'
 
 const previewConfig = ref<DashboardConfig | null>(null)
-const datasources = ref<DataSourceConfig[]>([])
+const datasources = ref<BackendDataSourceConfig[]>([])
 
 onMounted(async () => {
   try {
@@ -28,13 +29,7 @@ onMounted(async () => {
     previewConfig.value = null
   }
 
-  try {
-    const mod = await import('../../editor/editor_config.json')
-    const loaded = mod.default as { datasources?: DataSourceConfig[] }
-    if (loaded?.datasources?.length) datasources.value = loaded.datasources
-  } catch {
-    // ignore
-  }
+  datasources.value = loadDatasourceConfigFromStorage()
 
   if (typeof document !== 'undefined') document.title = '编辑器预览'
 })

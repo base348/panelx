@@ -62,6 +62,9 @@
       <button type="button" class="panelx-editor-btn" @click="loadWorkshopConfig">
         加载车间大屏配置
       </button>
+      <button type="button" class="panelx-editor-btn" @click="openDatasourceConfigPage">
+        数据源配置
+      </button>
     </aside>
     <main class="panelx-editor-main" ref="dropRef" @dragover.prevent @drop="onDrop">
       <div class="panelx-editor-ruler-outer" :style="rulerOuterStyle">
@@ -191,32 +194,31 @@
           </div>
         </div>
         <div class="panelx-editor-prop-group">
-          <h4>数据源</h4>
+          <h4>实例</h4>
           <div class="panelx-editor-field">
-            <label>逻辑编号</label>
+            <label>组件实例ID</label>
             <input
-              v-model="selectedConfig.logicCode"
+              :value="selectedConfig.id"
               type="text"
-              placeholder="如 chart_1、table_1"
-              title="与 SSE event / Polling 响应 key 对应"
+              placeholder="唯一实例ID"
+              title="用于数据路由与运行时定位"
+              @change="renameSelectedWidgetId(($event.target as HTMLInputElement).value)"
             />
           </div>
+        </div>
+        <div class="panelx-editor-prop-group">
+          <h4>数据源</h4>
           <div class="panelx-editor-field">
-            <label>绑定数据源</label>
-            <select
-              v-model="selectedConfig.datasourceKey"
-              class="panelx-editor-select"
-              title="选择后该 widget 将按 logicCode 接收该数据源推送"
-            >
-              <option value="">不绑定</option>
-              <option
-                v-for="ds in datasourceList"
-                :key="ds.key"
-                :value="ds.key"
-              >
-                {{ ds.key }} ({{ ds.type }})
-              </option>
-            </select>
+            <label>实例ID</label>
+            <div class="panelx-editor-props-empty">
+              使用组件 `id` 作为数据路由标识（后端 payload.widgetId / payload.id）。
+            </div>
+          </div>
+          <div class="panelx-editor-field">
+            <label>活动数据源</label>
+            <div class="panelx-editor-props-empty">
+              {{ activeDatasourceLabel }}
+            </div>
           </div>
         </div>
         <div v-if="propConfigList.length" class="panelx-editor-prop-group">
@@ -284,6 +286,7 @@ import {
   mergeDashboardWith3DDraft,
   saveEnable3DMergeToStorage
 } from '../utils/editor3dDraft'
+import { loadDatasourceConfigFromStorage } from '../utils/datasourceConfigStorage'
 
 const router = useRouter()
 
@@ -330,7 +333,15 @@ const FALLBACK_WIDGETS: RegisteredWidgetDef[] = [
 const editorConfig = ref<EditorConfig | null>(null)
 const widgetList = computed(() => editorConfig.value?.registeredWidgets?.length ? editorConfig.value!.registeredWidgets : FALLBACK_WIDGETS)
 /** 数据源列表，供右侧栏「绑定数据源」下拉使用 */
-const datasourceList = computed(() => editorConfig.value?.datasources ?? [])
+const datasourceCatalog = ref<EditorConfig['datasources']>([])
+const datasourceList = computed(() => datasourceCatalog.value ?? [])
+const activeDatasourceLabel = computed(() => {
+  const list = datasourceList.value ?? []
+  const enabled = list.filter((d) => d.enable === true)
+  const active = enabled[0] ?? list[0]
+  if (!active) return '未配置'
+  return `${active.key} (${active.type})`
+})
 
 const config = reactive<DashboardConfig>({
   design: { ...(getDesignSizeFromStorage() ?? DESIGN) },
@@ -435,6 +446,15 @@ function showMergeToastFromStats(): void {
 
 function buildExportPayload(): DashboardConfig {
   const plain = JSON.parse(JSON.stringify(config)) as DashboardConfig
+  const latestDatasource = loadDatasourceConfigFromStorage()
+  datasourceCatalog.value = latestDatasource
+  if (isDebugEnabled()) {
+    console.info('[Editor2D] datasource merged on export', {
+      count: latestDatasource.length,
+      keys: latestDatasource.map((d) => d.key)
+    })
+  }
+  plain.datasources = latestDatasource.map((ds) => ({ ...ds }))
   lastMerge3DStats.value = null
   if (!enable3DMerge.value) return plain
 
@@ -681,6 +701,13 @@ onMounted(async () => {
   } catch {
     // 使用 FALLBACK_WIDGETS
   }
+  datasourceCatalog.value = loadDatasourceConfigFromStorage()
+  if (isDebugEnabled()) {
+    console.info('[Editor2D] datasource loaded from localStorage', {
+      count: datasourceCatalog.value.length,
+      keys: datasourceCatalog.value.map((d) => d.key)
+    })
+  }
   document.addEventListener('keydown', onEditorKeydown)
 })
 
@@ -803,6 +830,35 @@ function widgetLabel(w: WidgetConfig2D) {
   return typeLabelByType.value[w.type] || w.type
 }
 
+function showWarnToast(text: string): void {
+  if (mergeToastTimer) {
+    clearTimeout(mergeToastTimer)
+    mergeToastTimer = null
+  }
+  mergeToast.value = { kind: 'warn', text }
+  mergeToastTimer = setTimeout(() => {
+    mergeToast.value = null
+    mergeToastTimer = null
+  }, 3000)
+}
+
+function renameSelectedWidgetId(raw: string): void {
+  const cur = selectedConfig.value
+  if (!cur) return
+  const next = String(raw ?? '').trim()
+  if (!next) {
+    showWarnToast('组件实例ID不能为空')
+    return
+  }
+  if (next === cur.id) return
+  if (config.widgets2D.some((w) => w !== cur && w.id === next)) {
+    showWarnToast(`组件实例ID重复：${next}`)
+    return
+  }
+  cur.id = next
+  selectedId.value = next
+}
+
 watch(
   () => config.widgets2D.length,
   (len) => {
@@ -869,6 +925,11 @@ function previewDashboard() {
   }
   showMergeToastFromStats()
   const href = router.resolve({ name: 'configurable', query: { source: 'local' } }).href
+  window.open(href, '_blank', 'noopener')
+}
+
+function openDatasourceConfigPage() {
+  const href = router.resolve({ name: 'datasourceConfig' }).href
   window.open(href, '_blank', 'noopener')
 }
 
