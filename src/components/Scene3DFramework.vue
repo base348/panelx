@@ -18,6 +18,7 @@ import {
   ORTHOGRAPHIC_FRUSTUM_SCALE,
   ORTHOGRAPHIC_F_CLIP,
   ORTHOGRAPHIC_N_CLIP,
+  initialOrthographicZoomFromWorldSize,
   orthographicHalfFromWorldSize,
   minOrthographicOrbitDistanceFromWorldSize,
   worldSizeHasPositiveExtent,
@@ -216,8 +217,17 @@ onMounted(() => {
       if (isOrthographic) {
         const od = minOrthographicOrbitDistanceFromWorldSize(ws0 && worldSizeHasPositiveExtent(ws0) ? ws0 : undefined)
         camera.position.copy(new Vector3(1, 1, 1).normalize().multiplyScalar(od))
+        ;(camera as OrthographicCamera).zoom = initialOrthographicZoomFromWorldSize(
+          ws0 && worldSizeHasPositiveExtent(ws0) ? ws0 : undefined
+        )
+        ;(camera as OrthographicCamera).updateProjectionMatrix()
       } else {
         camera.position.set(2, 1.5, 2)
+      }
+      const cameraZoom = Number(cameraConfig?.zoom)
+      if (Number.isFinite(cameraZoom) && cameraZoom > 0) {
+        camera.zoom = cameraZoom
+        camera.updateProjectionMatrix()
       }
 
       const sceneOptions = {

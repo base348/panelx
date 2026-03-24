@@ -127,12 +127,12 @@ type MoveCmd = CommandVec3 & { speed: number }
 type AutoRotateCmd = { enabled: boolean; axis: 'x' | 'y' | 'z'; speedDeg: number }
 type WidgetLike = { id: string; props?: Record<string, unknown> }
 
-const rightGroups = defineModel<RightGroups>('rightGroups', { required: true })
+let rightGroups = defineModel<RightGroups>('rightGroups', { required: true })
 const selectedWidgetId = defineModel<string | null>('selectedWidgetId', { required: true })
-const rotateCmd = defineModel<RotateCmd>('rotateCmd', { required: true })
-const moveCmd = defineModel<MoveCmd>('moveCmd', { required: true })
+let rotateCmd = defineModel<RotateCmd>('rotateCmd', { required: true })
+let moveCmd = defineModel<MoveCmd>('moveCmd', { required: true })
 const anchorWidgetId = defineModel<string | null>('anchorWidgetId', { required: true })
-const autoRotateCmd = defineModel<AutoRotateCmd>('autoRotateCmd', { required: true })
+let autoRotateCmd = defineModel<AutoRotateCmd>('autoRotateCmd', { required: true })
 const propertyRequestJson = defineModel<string>('propertyRequestJson', { required: true })
 const propertyRequestError = defineModel<string>('propertyRequestError', { required: true })
 

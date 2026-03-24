@@ -37,6 +37,22 @@ export function minOrthographicOrbitDistanceFromWorldSize(ws: WorldSizeLike | un
   return Math.max(R * 1.05, 12)
 }
 
+/**
+ * 正交相机初始化缩放倍率：
+ * - 视角覆盖仍按 xyz 外接球半高计算；
+ * - 首屏显示按 XY 平面尺度做放大，减少“模型太小需要先滚轮放大”的操作。
+ */
+export function initialOrthographicZoomFromWorldSize(ws: WorldSizeLike | undefined): number {
+  const x = Number(ws?.x)
+  const y = Number(ws?.y)
+  const ax = Number.isFinite(x) && x > 0 ? x : 0
+  const ay = Number.isFinite(y) && y > 0 ? y : 0
+  const planarHalf = Math.max(Math.sqrt(ax * ax + ay * ay) / 2, 0.0001)
+  const fullHalf = orthographicHalfFromWorldSize(ws)
+  const zoom = fullHalf / planarHalf
+  return Math.min(Math.max(zoom, 1), 20)
+}
+
 /** 至少有一轴为有限正数时才认为 worldSize 可用于推断正交半高。 */
 export function worldSizeHasPositiveExtent(ws: WorldSizeLike | undefined): boolean {
   const x = Number(ws?.x)

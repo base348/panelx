@@ -65,6 +65,15 @@
         </div>
       </div>
       <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
+        <span class="panelx-editor3d-size-label">相机</span>
+        <div class="panelx-editor3d-size-inputs">
+          <label title="Three.js camera.zoom，正交与透视均支持（语义不同）">
+            Zoom
+            <input v-model.number="cameraZoom" type="number" step="0.1" min="0.1" max="50" />
+          </label>
+        </div>
+      </div>
+      <div class="panelx-editor3d-size-row panelx-editor3d-size-row-inputs">
         <span class="panelx-editor3d-size-label">Lights</span>
         <div class="panelx-editor3d-size-inputs">
           <label>
@@ -175,17 +184,18 @@ import { LayerDef } from '../../../framework'
 import type { Scene3DCameraLayerItem } from '../../../types/dashboard'
 
 // 双向绑定：保留原 Editor3D 的 v-model 行为（避免 prop 只读问题）
-const leftGroups = defineModel<any>('leftGroups', { required: true })
-const designSize3D = defineModel<any>('designSize3D', { required: true })
+let leftGroups = defineModel<any>('leftGroups', { required: true })
+let designSize3D = defineModel<any>('designSize3D', { required: true })
 const worldScale = defineModel<any>('worldScale', { required: true })
 const worldSizeZ = defineModel<any>('worldSizeZ', { required: true })
-const designCoord = defineModel<any>('designCoord', { required: true })
-const sceneLights = defineModel<any>('sceneLights', { required: true })
+let designCoord = defineModel<any>('designCoord', { required: true })
+let sceneLights = defineModel<any>('sceneLights', { required: true })
 const bloomStrength = defineModel<any>('bloomStrength', { required: true })
 const bloomRadius = defineModel<any>('bloomRadius', { required: true })
 const bloomThreshold = defineModel<any>('bloomThreshold', { required: true })
+const cameraZoom = defineModel<any>('cameraZoom', { required: true })
 const editorBackgroundColor = defineModel<any>('editorBackgroundColor', { required: true })
-const cameraLayers = defineModel<Scene3DCameraLayerItem[]>('cameraLayers', { required: true })
+let cameraLayers = defineModel<Scene3DCameraLayerItem[]>('cameraLayers', { required: true })
 
 const emit = defineEmits<{ (e: 'camera-layer-change'): void }>()
 

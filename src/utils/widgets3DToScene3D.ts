@@ -138,6 +138,7 @@ export function widgets3DToScene3DConfig(
 
   const cameraType = scene?.camera?.type ?? (orthographicSize != null ? 'orthographic' : undefined)
   const cameraOrthographicSize = scene?.camera?.orthographicSize ?? orthographicSize
+  const cameraZoom = scene?.camera?.zoom
 
   const config: Scene3DConfig = {
     widgets3D: widgets3D.map((w) => ({ ...w, props: w.props ? { ...w.props } : undefined })),
@@ -154,6 +155,7 @@ export function widgets3DToScene3DConfig(
             ...(cameraType === 'orthographic' && cameraOrthographicSize != null
               ? { orthographicSize: cameraOrthographicSize }
               : {}),
+            ...(cameraZoom != null ? { zoom: cameraZoom } : {}),
             ...(cameraLayers ? { layers: cameraLayers } : {})
           }
         : undefined

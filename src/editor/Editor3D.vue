@@ -10,6 +10,7 @@
       v-model:bloomStrength="bloomStrength"
       v-model:bloomRadius="bloomRadius"
       v-model:bloomThreshold="bloomThreshold"
+      v-model:cameraZoom="cameraZoom"
       v-model:editorBackgroundColor="editorBackgroundColor"
       v-model:cameraLayers="cameraLayers"
       @camera-layer-change="applyCameraLayers"
@@ -170,6 +171,8 @@ const bloomStrength = ref(0.55)
 const bloomRadius = ref(0.22)
 /** 默认 0.35：在关闭 tone mapping 后，emissive 区域能稳定超过阈值并泛光 */
 const bloomThreshold = ref(0.35)
+/** 相机 zoom（正交与透视均可设置；语义不同），默认 1。 */
+const cameraZoom = ref(1)
 
 /** 3D 编辑区背景色（主区域），可用色彩选择器配置 */
 const editorBackgroundColor = ref('#0f172a')
@@ -187,6 +190,16 @@ function applyCameraLayers(): void {
   cameraLayers
     .filter((item) => item.enable)
     .forEach((item) => cam.layers.enable(LayerDef.normalize(item.layer)))
+}
+
+function applyCameraZoom(): void {
+  const sb = storyboardRef.value as BaseStoryBoard | null
+  if (!sb?.camera) return
+  const cam = sb.camera as { zoom?: number; updateProjectionMatrix?: () => void }
+  const z = Number(cameraZoom.value)
+  if (!Number.isFinite(z) || z <= 0) return
+  cam.zoom = z
+  cam.updateProjectionMatrix?.()
 }
 
 /** 3D world（由 setup3D 初始化；这里用最小接口以避免与具体实现强耦合） */
@@ -279,6 +292,7 @@ watch(
 
 /** bloom 阈值：越高，参与泛光的像素越少（避免整模发白） */
 watch(cameraLayers, () => applyCameraLayers(), { deep: true })
+watch(cameraZoom, () => applyCameraZoom())
 
 watch(
   () => ({ strength: bloomStrength.value, radius: bloomRadius.value, threshold: bloomThreshold.value }),
@@ -636,11 +650,16 @@ async function onImportConfigFile(e: Event): Promise<void> {
         )
       }
     }
+    if (scene3D?.camera?.zoom != null) {
+      const z = Number(scene3D.camera.zoom)
+      if (Number.isFinite(z) && z > 0) cameraZoom.value = z
+    }
 
     // 5) 按配置重新加入场景
     await nextTick()
     applyOrthographicByWorldSize()
     applyCameraLayers()
+    applyCameraZoom()
     for (const w of config.widgets3D ?? []) {
       addWidgetModelToScene(w)
     }
@@ -958,6 +977,7 @@ function buildDashboardExportPayload(): DashboardConfig {
       threshold: bloomThreshold.value
     },
     camera: {
+      zoom: cameraZoom.value,
       layers: cameraLayers.map((item) => ({ layer: LayerDef.normalize(item.layer), enable: item.enable }))
     }
   }

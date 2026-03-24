@@ -22,6 +22,7 @@ export { LayerDef } from './LayerDef'
 export {
   ORTHOGRAPHIC_FRUSTUM_SCALE,
   orthographicHalfFromWorldSize,
+  initialOrthographicZoomFromWorldSize,
   minOrthographicOrbitDistanceFromWorldSize,
   worldSizeHasPositiveExtent,
   ORTHOGRAPHIC_N_CLIP,

@@ -4,6 +4,7 @@ import {
   ORTHOGRAPHIC_FRUSTUM_SCALE,
   ORTHOGRAPHIC_F_CLIP,
   ORTHOGRAPHIC_N_CLIP,
+  initialOrthographicZoomFromWorldSize,
   modelRegistry,
   minOrthographicOrbitDistanceFromWorldSize,
   orthographicHalfFromWorldSize
@@ -162,6 +163,8 @@ export function useEditor3DSceneBinding(options: UseEditor3DSceneBindingOptions)
       const orbitDist = minOrthographicOrbitDistanceFromWorldSize(options.sceneWorldSize.value)
       const ORBIT_MAX_DISTANCE = Math.max(orbitDist * 20, 50000)
       cam.position.copy(new Vector3(1, 1, 1).normalize().multiplyScalar(orbitDist))
+      cam.zoom = initialOrthographicZoomFromWorldSize(options.sceneWorldSize.value)
+      cam.updateProjectionMatrix()
       const sb = new ControlsStoryBoard('Editor3D', cam, {
         background: null,
         orthographicSize: halfH,
