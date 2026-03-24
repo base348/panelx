@@ -45,6 +45,8 @@ export interface WidgetConfig2D {
 export interface WidgetConfig3D {
   id: string
   type: WidgetType3D
+  /** 实例分组标记，用于 Editor3D 实例树两层分组 */
+  groupId?: string
   /** 3D 世界尺寸/范围 */
   worldSize?: WorldSize
   /** 模型层配置：与 LayerDef 一致。单层 number，多层 number[] */

@@ -50,6 +50,7 @@ export class SSESource implements ControlSource {
     this.push = push
     this.currentStatus = 'running'
     this.retryMs = this.reconnectMs
+    this.logger({ type: 'sse_client_status', sourceId: this.id, status: 'starting', url: this.url })
     this.connect()
   }
 
@@ -60,6 +61,7 @@ export class SSESource implements ControlSource {
     this.es = null
     this.push = null
     this.currentStatus = 'stopped'
+    this.logger({ type: 'sse_client_status', sourceId: this.id, status: 'stopped' })
   }
 
   status(): ControlSourceStatus {
@@ -70,18 +72,40 @@ export class SSESource implements ControlSource {
     if (!this.push || this.currentStatus === 'stopped') return
     const es = new EventSource(this.url)
     this.es = es
+    this.logger({
+      type: 'sse_client_status',
+      sourceId: this.id,
+      status: 'connecting',
+      url: this.url,
+      eventName: this.eventName ?? 'message'
+    })
+
+    es.onopen = () => {
+      this.currentStatus = 'running'
+      this.retryMs = this.reconnectMs
+      this.logger({ type: 'sse_client_status', sourceId: this.id, status: 'connected' })
+    }
 
     const handler = (event: MessageEvent<string>): void => {
       if (!this.push) return
       const mapped = this.parseMessage(event, this.eventName)
       const list = Array.isArray(mapped) ? mapped : [mapped]
+      let receivedCount = 0
       for (const item of list) {
         const env = normalizeControlEnvelope(this.id, item)
         if (!env) continue
         const p = this.push
         if (!p) break
         p(env)
+        receivedCount += 1
       }
+      this.logger({
+        type: 'sse_data_received',
+        sourceId: this.id,
+        eventName: this.eventName ?? 'message',
+        rawLength: typeof event.data === 'string' ? event.data.length : 0,
+        envelopeCount: receivedCount
+      })
     }
 
     if (this.eventName) es.addEventListener(this.eventName, handler as EventListener)
@@ -90,11 +114,13 @@ export class SSESource implements ControlSource {
     es.onerror = () => {
       if (this.currentStatus === 'stopped') return
       this.currentStatus = 'error'
+      this.logger({ type: 'sse_client_status', sourceId: this.id, status: 'error', retryMs: this.retryMs })
       this.logger({ type: 'sse_error', sourceId: this.id, retryMs: this.retryMs })
       es.close()
       this.es = null
       this.retryTimer = setTimeout(() => {
         this.currentStatus = 'running'
+        this.logger({ type: 'sse_client_status', sourceId: this.id, status: 'reconnecting', retryMs: this.retryMs })
         this.retryMs = Math.min(this.retryMs * 2, this.maxReconnectMs)
         this.connect()
       }, this.retryMs)

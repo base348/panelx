@@ -65,6 +65,14 @@
       <button type="button" class="panelx-editor-btn" @click="openDatasourceConfigPage">
         数据源配置
       </button>
+      <div class="panelx-editor-merge-3d-hint">数据源探针：{{ datasourceProbeRunning ? '运行中' : '已停止' }}</div>
+      <InlineNotice :text="datasourceProbeHint" :variant="datasourceProbeHintVariant" />
+      <button type="button" class="panelx-editor-btn" :disabled="datasourceProbeRunning" @click="startDatasourceProbeManual">
+        启动数据源
+      </button>
+      <button type="button" class="panelx-editor-btn" :disabled="!datasourceProbeRunning" @click="stopDatasourceProbeManual">
+        停止数据源
+      </button>
     </aside>
     <main class="panelx-editor-main" ref="dropRef" @dragover.prevent @drop="onDrop">
       <div class="panelx-editor-ruler-outer" :style="rulerOuterStyle">
@@ -279,6 +287,7 @@ import { getWidgetSampleImageUrl } from '../assets/editor-samples'
 import { getWidgetDefaultProps, getWidgetPropConfig } from '../widgets/widgetRegistry'
 import type { WidgetPropDef } from '../types/widgets'
 import SizeSettingsDialog from './SizeSettingsDialog.vue'
+import InlineNotice from './components/InlineNotice.vue'
 import {
   EDITOR_3D_DRAFT_KEY,
   loadEditor3DDraft,
@@ -287,6 +296,7 @@ import {
   saveEnable3DMergeToStorage
 } from '../utils/editor3dDraft'
 import { loadDatasourceConfigFromStorage } from '../utils/datasourceConfigStorage'
+import { dataChainLog } from '../core/comm/dataChainLog'
 
 const router = useRouter()
 
@@ -335,6 +345,12 @@ const widgetList = computed(() => editorConfig.value?.registeredWidgets?.length 
 /** 数据源列表，供右侧栏「绑定数据源」下拉使用 */
 const datasourceCatalog = ref<EditorConfig['datasources']>([])
 const datasourceList = computed(() => datasourceCatalog.value ?? [])
+let stopDatasourceProbe: (() => void) | null = null
+const datasourceProbeRunning = ref(false)
+const datasourceProbeHint = ref('')
+const datasourceProbeHintVariant = ref<'info' | 'success' | 'warn' | 'error'>('info')
+let datasourceProbeHintTimer: ReturnType<typeof setTimeout> | null = null
+type EditorDatasource = NonNullable<EditorConfig['datasources']>[number]
 const activeDatasourceLabel = computed(() => {
   const list = datasourceList.value ?? []
   const enabled = list.filter((d) => d.enable === true)
@@ -342,6 +358,132 @@ const activeDatasourceLabel = computed(() => {
   if (!active) return '未配置'
   return `${active.key} (${active.type})`
 })
+
+function logEditor2DDatasourceState(stage: string, list: EditorDatasource[]): void {
+  const enabled = list.filter((d) => d.enable === true)
+  const active = enabled[0] ?? list[0]
+  dataChainLog('Editor2D.datasource', {
+    stage,
+    count: list.length,
+    enabledCount: enabled.length,
+    activeKey: active?.key ?? '',
+    activeType: active?.type ?? '',
+    keys: list.map((d) => d.key)
+  })
+}
+
+function setDatasourceProbeHint(text: string, variant: 'info' | 'success' | 'warn' | 'error' = 'info'): void {
+  datasourceProbeHint.value = text
+  datasourceProbeHintVariant.value = variant
+  if (datasourceProbeHintTimer) clearTimeout(datasourceProbeHintTimer)
+  datasourceProbeHintTimer = setTimeout(() => {
+    datasourceProbeHint.value = ''
+    datasourceProbeHintTimer = null
+  }, 3000)
+}
+
+function normalizeDatasourcePath(path: string): string {
+  const p = path.trim()
+  if (!p) return ''
+  if (/^https?:\/\//i.test(p)) return p
+  return p.startsWith('/') ? p : `/${p}`
+}
+
+function resolveDatasourceUrl(dsConfig: EditorDatasource): string {
+  const rawUrl = String(dsConfig.url ?? '').trim()
+  if (rawUrl) return rawUrl
+  const fallbackPath = dsConfig.type === 'sse' ? '/api/sse' : '/api/stats'
+  const path = normalizeDatasourcePath(String(dsConfig.path ?? fallbackPath))
+  const host = String(dsConfig.host ?? '').trim()
+  if (!host) return path
+  const h = host.endsWith('/') ? host.slice(0, -1) : host
+  return `${h}${path}`
+}
+
+function pickActiveDatasource(list: EditorDatasource[]) {
+  const enabled = list.filter((d) => d.enable === true)
+  return enabled[0] ?? list[0] ?? null
+}
+
+function startDatasourceProbe(list: EditorDatasource[]): void {
+  stopDatasourceProbe?.()
+  stopDatasourceProbe = null
+  datasourceProbeRunning.value = false
+  const active = pickActiveDatasource(list)
+  if (!active) {
+    dataChainLog('Editor2D.datasourceProbe', { stage: 'skip', reason: 'no_active_datasource' })
+    return
+  }
+  const url = resolveDatasourceUrl(active)
+  if (active.type === 'sse') {
+    const es = new EventSource(url)
+    es.onopen = () => dataChainLog('Editor2D.datasourceProbe', { stage: 'connected', type: 'sse', key: active.key, url })
+    es.onmessage = (evt) =>
+      dataChainLog('Editor2D.datasourceProbe', {
+        stage: 'data',
+        type: 'sse',
+        key: active.key,
+        rawLength: String(evt.data ?? '').length
+      })
+    es.onerror = () => dataChainLog('Editor2D.datasourceProbe', { stage: 'error', type: 'sse', key: active.key })
+    datasourceProbeRunning.value = true
+    stopDatasourceProbe = () => {
+      es.close()
+      datasourceProbeRunning.value = false
+    }
+    return
+  }
+  let timer: ReturnType<typeof setInterval> | null = null
+  const poll = async () => {
+    try {
+      const res = await fetch(url, { method: active.method ?? 'GET' })
+      const text = await res.text()
+      dataChainLog('Editor2D.datasourceProbe', {
+        stage: 'data',
+        type: 'polling',
+        key: active.key,
+        status: res.status,
+        rawLength: text.length
+      })
+    } catch (err) {
+      dataChainLog('Editor2D.datasourceProbe', {
+        stage: 'error',
+        type: 'polling',
+        key: active.key,
+        message: String(err)
+      })
+    }
+  }
+  void poll()
+  timer = setInterval(() => void poll(), Math.max(500, Number(active.interval ?? 2000)))
+  datasourceProbeRunning.value = true
+  stopDatasourceProbe = () => {
+    if (timer) clearInterval(timer)
+    timer = null
+    datasourceProbeRunning.value = false
+  }
+}
+
+function startDatasourceProbeManual(): void {
+  dataChainLog('Editor2D.datasourceProbe.control', {
+    action: 'start',
+    running: datasourceProbeRunning.value,
+    datasourceCount: datasourceCatalog.value?.length ?? 0
+  })
+  startDatasourceProbe(datasourceCatalog.value ?? [])
+  setDatasourceProbeHint(datasourceProbeRunning.value ? '数据源已启动' : '未找到可启动的数据源', datasourceProbeRunning.value ? 'success' : 'warn')
+}
+
+function stopDatasourceProbeManual(): void {
+  dataChainLog('Editor2D.datasourceProbe.control', {
+    action: 'stop',
+    running: datasourceProbeRunning.value
+  })
+  stopDatasourceProbe?.()
+  stopDatasourceProbe = null
+  datasourceProbeRunning.value = false
+  setDatasourceProbeHint('数据源已停止', 'info')
+}
 
 const config = reactive<DashboardConfig>({
   design: { ...(getDesignSizeFromStorage() ?? DESIGN) },
@@ -448,6 +590,7 @@ function buildExportPayload(): DashboardConfig {
   const plain = JSON.parse(JSON.stringify(config)) as DashboardConfig
   const latestDatasource = loadDatasourceConfigFromStorage()
   datasourceCatalog.value = latestDatasource
+  logEditor2DDatasourceState('export', latestDatasource)
   if (isDebugEnabled()) {
     console.info('[Editor2D] datasource merged on export', {
       count: latestDatasource.length,
@@ -702,6 +845,7 @@ onMounted(async () => {
     // 使用 FALLBACK_WIDGETS
   }
   datasourceCatalog.value = loadDatasourceConfigFromStorage()
+  logEditor2DDatasourceState('mounted', datasourceCatalog.value)
   if (isDebugEnabled()) {
     console.info('[Editor2D] datasource loaded from localStorage', {
       count: datasourceCatalog.value.length,
@@ -896,6 +1040,9 @@ function onEditorKeydown(e: KeyboardEvent) {
 }
 
 onUnmounted(() => {
+  stopDatasourceProbeManual()
+  if (datasourceProbeHintTimer) clearTimeout(datasourceProbeHintTimer)
+  datasourceProbeHintTimer = null
   document.removeEventListener('keydown', onEditorKeydown)
   if (mergeToastTimer) {
     clearTimeout(mergeToastTimer)

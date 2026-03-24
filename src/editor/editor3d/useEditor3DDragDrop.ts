@@ -22,6 +22,7 @@ type DragPayloadPreset = {
 
 type UseEditor3DDragDropOptions = {
   widgets3DRef: Ref<WidgetConfig3D[] | undefined>
+  defaultGroupIdRef: Ref<string>
   customPropsKey: string
   defaultLayer: number
   spriteLayer: number
@@ -84,6 +85,7 @@ export function useEditor3DDragDrop(options: UseEditor3DDragDropOptions) {
     const w: WidgetConfig3D = {
       id,
       type: 'model3d',
+      groupId: options.defaultGroupIdRef.value,
       layer: options.defaultLayer,
       visible: true,
       props: { position, scale: scaleVal }

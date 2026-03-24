@@ -1,6 +1,21 @@
 <template>
   <div class="panelx-editor3d-pos-editor">
     <div class="panelx-editor3d-pos-row">
+      <span class="panelx-editor3d-size-label">实例ID (id)</span>
+      <div class="panelx-editor3d-size-inputs">
+        <input
+          :value="selectedWidgetId"
+          type="text"
+          class="panelx-editor3d-props-value"
+          placeholder="唯一实例ID"
+          @change="onRenameWidgetId(($event.target as HTMLInputElement).value)"
+        />
+      </div>
+    </div>
+    <div v-if="selectedWidgetIdError" class="panelx-editor3d-pos-row">
+      <span class="panelx-editor3d-size-value" style="color: #fca5a5;">{{ selectedWidgetIdError }}</span>
+    </div>
+    <div class="panelx-editor3d-pos-row">
       <span class="panelx-editor3d-size-label">名称 (name)</span>
       <div class="panelx-editor3d-size-inputs">
         <input
@@ -9,6 +24,14 @@
           class="panelx-editor3d-props-value"
           placeholder="可空，用于实例列表显示"
         />
+      </div>
+    </div>
+    <div class="panelx-editor3d-pos-row">
+      <span class="panelx-editor3d-size-label">分组 (group)</span>
+      <div class="panelx-editor3d-size-inputs">
+        <select v-model="selectedWidgetGroupId" class="panelx-editor3d-props-value">
+          <option v-for="gid in groupOptions" :key="gid" :value="gid">{{ gid }}</option>
+        </select>
       </div>
     </div>
     <div class="panelx-editor3d-pos-row">
@@ -68,6 +91,9 @@ type Vec3 = { x: number; y: number; z: number }
 type AxisLock = { x: boolean; y: boolean; z: boolean }
 
 const selectedWidgetName = defineModel<string>('selectedWidgetName', { required: true })
+const selectedWidgetId = defineModel<string>('selectedWidgetId', { required: true })
+const selectedWidgetIdError = defineModel<string>('selectedWidgetIdError', { required: true })
+const selectedWidgetGroupId = defineModel<string>('selectedWidgetGroupId', { required: true })
 const selectedPosition = defineModel<Vec3>('selectedPosition', { required: true })
 const axisLock = defineModel<AxisLock>('axisLock', { required: true })
 const selectedScaleUniform = defineModel<number>('selectedScaleUniform', { required: true })
@@ -75,6 +101,8 @@ const selectedScale = defineModel<Vec3>('selectedScale', { required: true })
 const selectedRotation = defineModel<Vec3>('selectedRotation', { required: true })
 
 defineProps({
+  groupOptions: { type: Array as PropType<string[]>, required: true },
+  onRenameWidgetId: { type: Function as PropType<(nextId: string) => void>, required: true },
   onPositionInputChange: { type: Function as PropType<(axis: 'x' | 'y' | 'z') => void>, required: true },
   onScaleUniformChange: { type: Function as PropType<() => void>, required: true },
   onScaleAxisChange: { type: Function as PropType<(axis: 'x' | 'y' | 'z') => void>, required: true },

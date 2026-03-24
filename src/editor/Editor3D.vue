@@ -30,6 +30,11 @@
       :stop-control-engine="stopControlEngine"
       :pause-control-engine="pauseControlEngine"
       :resume-control-engine="resumeControlEngine"
+      :datasource-probe-running="datasourceProbeRunning"
+      :datasource-probe-hint="datasourceProbeHint"
+      :datasource-probe-hint-variant="datasourceProbeHintVariant"
+      :start-datasource-probe="startDatasourceProbeManual"
+      :stop-datasource-probe="stopDatasourceProbeManual"
     />
     <input
       ref="importInputRef"
@@ -44,6 +49,7 @@
       :editor-background-color="editorBackgroundColor"
       :world-outer-style="worldOuterStyle"
       :widgets3D="widgets3D"
+      :group-options="groupOptions"
       :selected-widget-id="selectedWidgetId"
       :floating-instance-list-open="floatingInstanceListOpen"
       :get-widget-display-name="getWidgetDisplayName"
@@ -51,6 +57,7 @@
       :on-select-widget="onSelectWidget"
       :clone-widget="cloneWidget"
       :delete-widget="deleteWidget"
+      :on-create-group="createGroup"
       @dragover="isDragOver = true"
       @dragleave="isDragOver = false"
       @drop="onDrop"
@@ -60,6 +67,9 @@
     <RightSidebar
       v-model:rightGroups="rightGroups"
       v-model:selectedWidgetId="selectedWidgetId"
+      v-model:selectedWidgetIdText="selectedWidgetIdText"
+      v-model:selectedWidgetIdError="selectedWidgetIdError"
+      v-model:selectedWidgetGroupId="selectedWidgetGroupId"
       v-model:selectedWidgetName="selectedWidgetName"
       v-model:selectedPosition="selectedPosition"
       v-model:axisLock="axisLock"
@@ -78,6 +88,8 @@
       :selected-widget-supported-props="selectedWidgetSupportedProps"
       :selected-widget-custom-props="selectedWidgetCustomProps"
       :custom-only-prop-entries="customOnlyPropEntries as any"
+      :group-options="groupOptions"
+      :rename-selected-widget-id="renameSelectedWidgetId"
       :on-position-input-change="onPositionInputChange"
       :on-scale-uniform-change="onScaleUniformChange"
       :on-scale-axis-change="onScaleAxisChange"
@@ -134,6 +146,7 @@ import type { DashboardConfig, WidgetConfig3D, Scene3DCameraLayerItem } from '..
 import type { BackendDataSourceConfig } from '../types'
 import { loadDatasourceConfigFromStorage } from '../utils/datasourceConfigStorage'
 import { isDebugEnabled } from '../utils/logManager'
+import { dataChainLog } from '../core/comm/dataChainLog'
 import type { PropDefinition } from '../framework'
 import type { Loader } from '../framework'
 import { Object3D, OrthographicCamera, Vector3 } from 'three'
@@ -329,7 +342,144 @@ const config = reactive<DashboardConfig>({
   widgets2D: [],
   widgets3D: []
 })
+const groupOptions = ref<string[]>(['default'])
 const datasourceCatalog = ref<BackendDataSourceConfig[]>([])
+let stopDatasourceProbe: (() => void) | null = null
+const datasourceProbeRunning = ref(false)
+const datasourceProbeHint = ref('')
+const datasourceProbeHintVariant = ref<'info' | 'success' | 'warn' | 'error'>('info')
+let datasourceProbeHintTimer: ReturnType<typeof setTimeout> | null = null
+
+function logEditor3DDatasourceState(stage: string, list: BackendDataSourceConfig[]): void {
+  const enabled = list.filter((d) => d.enable === true)
+  const active = enabled[0] ?? list[0]
+  dataChainLog('Editor3D.datasource', {
+    stage,
+    count: list.length,
+    enabledCount: enabled.length,
+    activeKey: active?.key ?? '',
+    activeType: active?.type ?? '',
+    keys: list.map((d) => d.key)
+  })
+}
+
+function setDatasourceProbeHint(text: string, variant: 'info' | 'success' | 'warn' | 'error' = 'info'): void {
+  datasourceProbeHint.value = text
+  datasourceProbeHintVariant.value = variant
+  if (datasourceProbeHintTimer) clearTimeout(datasourceProbeHintTimer)
+  datasourceProbeHintTimer = setTimeout(() => {
+    datasourceProbeHint.value = ''
+    datasourceProbeHintTimer = null
+  }, 3000)
+}
+
+function normalizeDatasourcePath(path: string): string {
+  const p = path.trim()
+  if (!p) return ''
+  if (/^https?:\/\//i.test(p)) return p
+  return p.startsWith('/') ? p : `/${p}`
+}
+
+function resolveDatasourceUrl(dsConfig: BackendDataSourceConfig): string {
+  const rawUrl = String(dsConfig.url ?? '').trim()
+  if (rawUrl) return rawUrl
+  const fallbackPath = dsConfig.type === 'sse' ? '/api/sse' : '/api/stats'
+  const path = normalizeDatasourcePath(String(dsConfig.path ?? fallbackPath))
+  const host = String(dsConfig.host ?? '').trim()
+  if (!host) return path
+  const h = host.endsWith('/') ? host.slice(0, -1) : host
+  return `${h}${path}`
+}
+
+function pickActiveDatasource(list: BackendDataSourceConfig[]): BackendDataSourceConfig | null {
+  const enabled = list.filter((d) => d.enable === true)
+  if (enabled.length > 1) return enabled[0] ?? null
+  if (enabled.length === 1) return enabled[0]
+  return list[0] ?? null
+}
+
+function startDatasourceProbe(list: BackendDataSourceConfig[]): void {
+  stopDatasourceProbe?.()
+  stopDatasourceProbe = null
+  datasourceProbeRunning.value = false
+  const active = pickActiveDatasource(list)
+  if (!active) {
+    dataChainLog('Editor3D.datasourceProbe', { stage: 'skip', reason: 'no_active_datasource' })
+    return
+  }
+  const url = resolveDatasourceUrl(active)
+
+  if (active.type === 'sse') {
+    const es = new EventSource(url)
+    es.onopen = () => dataChainLog('Editor3D.datasourceProbe', { stage: 'connected', type: 'sse', key: active.key, url })
+    es.onmessage = (evt) => {
+      dataChainLog('Editor3D.datasourceProbe', {
+        stage: 'data',
+        type: 'sse',
+        key: active.key,
+        rawLength: String(evt.data ?? '').length
+      })
+    }
+    es.onerror = () => dataChainLog('Editor3D.datasourceProbe', { stage: 'error', type: 'sse', key: active.key })
+    datasourceProbeRunning.value = true
+    stopDatasourceProbe = () => {
+      es.close()
+      datasourceProbeRunning.value = false
+    }
+    return
+  }
+
+  let timer: ReturnType<typeof setInterval> | null = null
+  const poll = async () => {
+    try {
+      const res = await fetch(url, { method: active.method ?? 'GET' })
+      const text = await res.text()
+      dataChainLog('Editor3D.datasourceProbe', {
+        stage: 'data',
+        type: 'polling',
+        key: active.key,
+        status: res.status,
+        rawLength: text.length
+      })
+    } catch (err) {
+      dataChainLog('Editor3D.datasourceProbe', {
+        stage: 'error',
+        type: 'polling',
+        key: active.key,
+        message: String(err)
+      })
+    }
+  }
+  void poll()
+  timer = setInterval(() => void poll(), Math.max(500, active.interval ?? 2000))
+  datasourceProbeRunning.value = true
+  stopDatasourceProbe = () => {
+    if (timer) clearInterval(timer)
+    timer = null
+    datasourceProbeRunning.value = false
+  }
+}
+
+function startDatasourceProbeManual(): void {
+  dataChainLog('Editor3D.datasourceProbe.control', {
+    action: 'start',
+    running: datasourceProbeRunning.value,
+    datasourceCount: datasourceCatalog.value.length
+  })
+  startDatasourceProbe(datasourceCatalog.value)
+  setDatasourceProbeHint(datasourceProbeRunning.value ? '数据源已启动' : '未找到可启动的数据源', datasourceProbeRunning.value ? 'success' : 'warn')
+}
+
+function stopDatasourceProbeManual(): void {
+  dataChainLog('Editor3D.datasourceProbe.control', {
+    action: 'stop',
+    running: datasourceProbeRunning.value
+  })
+  stopDatasourceProbe?.()
+  stopDatasourceProbe = null
+  datasourceProbeRunning.value = false
+  setDatasourceProbeHint('数据源已停止', 'info')
+}
 
 const widgets3D = computed(() => config.widgets3D ?? [])
 
@@ -386,11 +536,119 @@ const selectedWidgetName = computed<string>({
   }
 })
 
+const selectedWidgetIdError = ref('')
+const selectedWidgetIdText = computed<string>({
+  get() {
+    return selectedWidgetId.value ?? ''
+  },
+  set(v: string) {
+    renameSelectedWidgetId(v)
+  }
+})
+const selectedWidgetGroupId = computed<string>({
+  get() {
+    const id = selectedWidgetId.value
+    if (!id) return 'default'
+    const w = config.widgets3D?.find((item) => item.id === id)
+    const gid = String(w?.groupId ?? 'default').trim() || 'default'
+    return gid
+  },
+  set(v: string) {
+    const id = selectedWidgetId.value
+    if (!id) return
+    const w = config.widgets3D?.find((item) => item.id === id)
+    if (!w) return
+    const gid = normalizeGroupId(v)
+    ensureGroupExists(gid)
+    w.groupId = gid
+  }
+})
+
 /** 实例显示名：优先 props.name，回退到 widget.id。 */
 function getWidgetDisplayName(w: WidgetConfig3D): string {
   const name = (w.props as Record<string, unknown> | undefined)?.name
   if (typeof name === 'string' && name.trim() !== '') return name.trim()
   return w.id
+}
+
+function renameSelectedWidgetId(nextIdRaw: string): void {
+  const currentId = selectedWidgetId.value
+  if (!currentId) return
+  const nextId = String(nextIdRaw ?? '').trim()
+  if (!nextId) {
+    selectedWidgetIdError.value = '实例ID不能为空'
+    return
+  }
+  if (nextId === currentId) {
+    selectedWidgetIdError.value = ''
+    return
+  }
+  const list = config.widgets3D ?? []
+  if (list.some((w) => w.id === nextId)) {
+    selectedWidgetIdError.value = `实例ID重复：${nextId}`
+    return
+  }
+  const widget = list.find((w) => w.id === currentId)
+  if (!widget) {
+    selectedWidgetIdError.value = `未找到实例：${currentId}`
+    return
+  }
+
+  widget.id = nextId
+  selectedWidgetId.value = nextId
+  if (anchorWidgetId.value === currentId) anchorWidgetId.value = nextId
+
+  if (addedModelNames.has(currentId)) {
+    addedModelNames.delete(currentId)
+    addedModelNames.add(nextId)
+  }
+  if (pendingTransforms.has(currentId)) {
+    const tf = pendingTransforms.get(currentId)!
+    pendingTransforms.delete(currentId)
+    pendingTransforms.set(nextId, tf)
+  }
+  if (addedModelNodes.has(currentId)) {
+    const node = addedModelNodes.get(currentId)!
+    addedModelNodes.delete(currentId)
+    addedModelNodes.set(nextId, node)
+  }
+
+  const sb = storyboardRef.value as BaseStoryBoard | null
+  const model = sb?.getModelByName(currentId)
+  if (model) model.modelName = nextId
+
+  const storeMap = loaderRef.value?.getStore?.().getModels?.() as Map<string, Model> | undefined
+  if (storeMap && storeMap.has(currentId)) {
+    const m = storeMap.get(currentId)!
+    storeMap.delete(currentId)
+    storeMap.set(nextId, m)
+  }
+  selectedWidgetIdError.value = ''
+  dataChainLog('Editor3D.renameWidgetId', { from: currentId, to: nextId })
+}
+
+function normalizeGroupId(raw: string): string {
+  const text = String(raw ?? '').trim()
+  return text || 'default'
+}
+
+function ensureGroupExists(groupId: string): void {
+  const gid = normalizeGroupId(groupId)
+  if (!groupOptions.value.includes(gid)) groupOptions.value.push(gid)
+}
+
+function ensureWidgetGroups(): void {
+  const list = config.widgets3D ?? []
+  for (const w of list) {
+    w.groupId = normalizeGroupId(String(w.groupId ?? 'default'))
+    ensureGroupExists(w.groupId)
+  }
+}
+
+function createGroup(name: string): void {
+  const gid = normalizeGroupId(name)
+  ensureGroupExists(gid)
+  dataChainLog('Editor3D.group.create', { groupId: gid, total: groupOptions.value.length })
 }
 
 const leftGroups = reactive({
@@ -496,6 +754,7 @@ function applyMaskToModel(id: string, opts: { selected: boolean }): void {
 watch(
   () => selectedWidgetId.value,
   (next, prev) => {
+    selectedWidgetIdError.value = ''
     if (prev) applyMaskToModel(prev, { selected: false })
     if (next) applyMaskToModel(next, { selected: true })
     if (next) {
@@ -575,8 +834,10 @@ async function onImportConfigFile(e: Event): Promise<void> {
     const importedWidgets = (payload.widgets3D ?? []) as WidgetConfig3D[]
     config.widgets3D = importedWidgets.map((w) => ({
       ...w,
+      groupId: normalizeGroupId(String(w.groupId ?? 'default')),
       props: w.props ? { ...(w.props as Record<string, unknown>) } : {}
     }))
+    ensureWidgetGroups()
 
     // 3.1) sceneWorldSize：优先使用导入的 worldSize（取第一个 widget），否则按跟随策略决定
     const importedWorldSize = config.widgets3D?.[0]?.worldSize
@@ -852,6 +1113,7 @@ const {
       config.widgets3D = v
     }
   }),
+  defaultGroupIdRef: selectedWidgetGroupId,
   customPropsKey: CUSTOM_PROPS_KEY,
   defaultLayer: LayerDef.default,
   spriteLayer: LayerDef.sprite,
@@ -900,6 +1162,7 @@ function cloneWidget(source: WidgetConfig3D): void {
   const w: WidgetConfig3D = {
     ...source,
     id,
+    groupId: normalizeGroupId(String(source.groupId ?? 'default')),
     props: nextProps
   }
 
@@ -926,6 +1189,7 @@ function formatWidgetScale(scale: unknown): string {
 
 onMounted(async () => {
   datasourceCatalog.value = loadDatasourceConfigFromStorage()
+  logEditor3DDatasourceState('mounted', datasourceCatalog.value)
   if (isDebugEnabled()) {
     console.info('[Editor3D] datasource loaded from localStorage', {
       count: datasourceCatalog.value.length,
@@ -935,9 +1199,13 @@ onMounted(async () => {
   await nextTick()
   // 初始化 3D world：主区域容器内创建 renderer/canvas，并在资源加载完成后回调 onFrameworkLoaded
   setup3D('#panelx-editor3d-world', onFrameworkLoaded, () => [])
+  ensureWidgetGroups()
 })
 
 onUnmounted(() => {
+  stopDatasourceProbeManual()
+  if (datasourceProbeHintTimer) clearTimeout(datasourceProbeHintTimer)
+  datasourceProbeHintTimer = null
   cleanupEditor3DManagers()
   clearDemoInfoBoxes()
   try {
@@ -953,6 +1221,7 @@ onUnmounted(() => {
 /** 构建与「导出 JSON」一致的 Dashboard 片段（仅含 3D 相关字段 + design 供对齐），供文件下载与 localStorage 草稿共用 */
 function buildDashboardExportPayload(): DashboardConfig {
   datasourceCatalog.value = loadDatasourceConfigFromStorage()
+  logEditor3DDatasourceState('export', datasourceCatalog.value)
   if (isDebugEnabled()) {
     console.info('[Editor3D] datasource merged on export', {
       count: datasourceCatalog.value.length,
@@ -987,6 +1256,7 @@ function buildDashboardExportPayload(): DashboardConfig {
           return {
             id: w.id,
             type: w.type,
+            groupId: normalizeGroupId(String(w.groupId ?? 'default')),
             layer: w.layer,
             worldSize: w.worldSize ?? { x: sceneWorldSize.value.x, y: sceneWorldSize.value.y, z: sceneWorldSize.value.z },
             visible: w.visible,

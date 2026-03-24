@@ -184,6 +184,19 @@
         <button type="button" class="panelx-editor3d-btn" @click="stopControlEngine">停止</button>
       </div>
     </div>
+    <div class="panelx-editor3d-size-row panelx-editor3d-size-row-bg" style="margin-top: 0.5rem;">
+      <span class="panelx-editor3d-size-label">数据源</span>
+      <div class="panelx-editor3d-size-inputs">
+        <span class="panelx-editor3d-size-value">{{ datasourceProbeRunning ? 'running' : 'stopped' }}</span>
+        <button type="button" class="panelx-editor3d-btn" :disabled="datasourceProbeRunning" @click="startDatasourceProbe">
+          启动
+        </button>
+        <button type="button" class="panelx-editor3d-btn" :disabled="!datasourceProbeRunning" @click="stopDatasourceProbe">
+          停止
+        </button>
+      </div>
+    </div>
+    <InlineNotice :text="datasourceProbeHint" :variant="datasourceProbeHintVariant" />
   </aside>
 </template>
 
@@ -193,6 +206,7 @@ import type { ModelTypeDefinition } from '../../../framework'
 import type { StyleValue } from 'vue'
 import { LayerDef } from '../../../framework'
 import type { Scene3DCameraLayerItem } from '../../../types/dashboard'
+import InlineNotice from '../../components/InlineNotice.vue'
 
 // 双向绑定：保留原 Editor3D 的 v-model 行为（避免 prop 只读问题）
 let leftGroups = defineModel<any>('leftGroups', { required: true })
@@ -242,7 +256,12 @@ defineProps({
   startControlEngine: { type: Function as PropType<() => void>, required: true },
   stopControlEngine: { type: Function as PropType<() => void>, required: true },
   pauseControlEngine: { type: Function as PropType<() => void>, required: true },
-  resumeControlEngine: { type: Function as PropType<() => void>, required: true }
+  resumeControlEngine: { type: Function as PropType<() => void>, required: true },
+  datasourceProbeRunning: { type: Boolean as PropType<boolean>, required: true },
+  datasourceProbeHint: { type: String as PropType<string>, required: true },
+  datasourceProbeHintVariant: { type: String as PropType<'info' | 'success' | 'warn' | 'error'>, required: true },
+  startDatasourceProbe: { type: Function as PropType<() => void>, required: true },
+  stopDatasourceProbe: { type: Function as PropType<() => void>, required: true }
 })
 </script>
 

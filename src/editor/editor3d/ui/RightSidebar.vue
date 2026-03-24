@@ -12,12 +12,17 @@
     <template v-else>
       <Transform3DSection
         v-if="rightGroups.transformOpen"
+        v-model:selectedWidgetId="selectedWidgetIdText"
+        v-model:selectedWidgetIdError="selectedWidgetIdError"
+        v-model:selectedWidgetGroupId="selectedWidgetGroupId"
         v-model:selectedWidgetName="selectedWidgetName"
         v-model:selectedPosition="selectedPosition"
         v-model:axisLock="axisLock"
         v-model:selectedScaleUniform="selectedScaleUniform"
         v-model:selectedScale="selectedScale"
         v-model:selectedRotation="selectedRotation"
+        :group-options="groupOptions"
+        :on-rename-widget-id="renameSelectedWidgetId"
         :on-position-input-change="onPositionInputChange"
         :on-scale-uniform-change="onScaleUniformChange"
         :on-scale-axis-change="onScaleAxisChange"
@@ -81,6 +86,9 @@ type WidgetLike = { id: string; props?: Record<string, unknown> }
 
 let rightGroups = defineModel<RightGroups>('rightGroups', { required: true })
 const selectedWidgetId = defineModel<string | null>('selectedWidgetId', { required: true })
+const selectedWidgetIdText = defineModel<string>('selectedWidgetIdText', { required: true })
+const selectedWidgetIdError = defineModel<string>('selectedWidgetIdError', { required: true })
+const selectedWidgetGroupId = defineModel<string>('selectedWidgetGroupId', { required: true })
 const selectedWidgetName = defineModel<string>('selectedWidgetName', { required: true })
 const selectedPosition = defineModel<Vec3>('selectedPosition', { required: true })
 const selectedScale = defineModel<Vec3>('selectedScale', { required: true })
@@ -101,6 +109,8 @@ defineProps({
   selectedWidgetSupportedProps: { type: Array as PropType<PropDefinition[]>, required: true },
   selectedWidgetCustomProps: { type: Object as PropType<Record<string, unknown>>, required: true },
   customOnlyPropEntries: { type: Array as PropType<Array<[string, string | number]>>, required: true },
+  groupOptions: { type: Array as PropType<string[]>, required: true },
+  renameSelectedWidgetId: { type: Function as PropType<(nextId: string) => void>, required: true },
   onPositionInputChange: { type: Function as PropType<(axis: 'x' | 'y' | 'z') => void>, required: true },
   onScaleUniformChange: { type: Function as PropType<() => void>, required: true },
   onScaleAxisChange: { type: Function as PropType<(axis: 'x' | 'y' | 'z') => void>, required: true },

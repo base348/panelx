@@ -267,6 +267,7 @@ async function ensureGlobalDatasource(dsConfig: BackendDataSourceConfig): Promis
             source = new SSESource({
               sourceId: dsConfig.key,
               url: resolveDatasourceUrl(dsConfig),
+              logger: (entry) => dataChainLog('Dashboard.sseClient', entry),
               parseMessage: (message) => {
                 let parsed: unknown
                 try {

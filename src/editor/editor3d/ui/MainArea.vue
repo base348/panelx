@@ -9,6 +9,7 @@
   >
     <InstancePanel
       :widgets3D="widgets3D"
+      :group-options="groupOptions"
       :selected-widget-id="selectedWidgetId"
       :open="floatingInstanceListOpen"
       :get-widget-display-name="getWidgetDisplayName"
@@ -16,6 +17,7 @@
       :on-select-widget="onSelectWidget"
       :clone-widget="cloneWidget"
       :delete-widget="deleteWidget"
+      :on-create-group="onCreateGroup"
       @update:open="emit('update:floatingInstanceListOpen', $event)"
     />
     <WorldCanvas :world-outer-style="worldOuterStyle" :widgets3D="widgets3D" />
@@ -33,6 +35,7 @@ defineProps({
   editorBackgroundColor: { type: String, required: true },
   worldOuterStyle: { type: Object as PropType<StyleValue>, required: true },
   widgets3D: { type: Array as PropType<WidgetConfig3D[]>, required: true },
+  groupOptions: { type: Array as PropType<string[]>, required: true },
   // 允许 null（未选中时）
   selectedWidgetId: { type: [String, null] as unknown as PropType<string | null>, required: true },
   floatingInstanceListOpen: { type: Boolean, required: true },
@@ -40,7 +43,8 @@ defineProps({
   formatWidgetScale: { type: Function as PropType<(s: unknown) => string>, required: true },
   onSelectWidget: { type: Function as PropType<(w: WidgetConfig3D) => void>, required: true },
   cloneWidget: { type: Function as PropType<(w: WidgetConfig3D) => void>, required: true },
-  deleteWidget: { type: Function as PropType<(w: WidgetConfig3D) => void>, required: true }
+  deleteWidget: { type: Function as PropType<(w: WidgetConfig3D) => void>, required: true },
+  onCreateGroup: { type: Function as PropType<(name: string) => void>, required: true }
 })
 
 const emit = defineEmits<{
