@@ -13,6 +13,8 @@ export type WidgetType2D =
   | 'panel'
   | 'screenTitle'
   | 'topBar'
+  | 'topBarTime'
+  | 'topBarClimate'
   | 'glassChart'
   | 'textPanel2D'
   | 'tableChart'

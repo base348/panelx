@@ -108,6 +108,24 @@
               @mousedown="onCanvasMouseDown"
             >
               <template v-if="config.widgets2D.length">
+                <!-- 实时渲染层：在编辑器中直接渲染组件实例（不拦截鼠标，避免影响拖拽/缩放） -->
+                <div class="panelx-editor-widgets-live-layer" aria-hidden="true">
+                  <div
+                    v-for="w in config.widgets2D"
+                    :key="w.id"
+                    class="panelx-editor-widget-live"
+                    :style="widgetFrameStyle(w)"
+                  >
+                    <div class="panelx-editor-widget-live-inner" :style="widgetLiveInnerStyle">
+                      <component
+                        :is="getWidgetComponent(w.type)"
+                        :key="widgetLiveKey(w)"
+                        v-bind="(getWidgetLiveProps(w)) as Record<string, unknown>"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div class="panelx-editor-widgets-layer">
                   <div
                     v-for="w in config.widgets2D"
@@ -284,7 +302,7 @@ import type { DashboardConfig, WidgetConfig2D } from '../types/dashboard'
 import type { EditorConfig, RegisteredWidgetDef } from '../types/editor'
 import { setDebugFromConfig, isDebugEnabled } from '../utils/logManager'
 import { getWidgetSampleImageUrl } from '../assets/editor-samples'
-import { getWidgetDefaultProps, getWidgetPropConfig } from '../widgets/widgetRegistry'
+import { getWidgetComponent, getWidgetDefaultProps, getWidgetPropConfig } from '../widgets/widgetRegistry'
 import type { WidgetPropDef } from '../types/widgets'
 import SizeSettingsDialog from './SizeSettingsDialog.vue'
 import InlineNotice from './components/InlineNotice.vue'
@@ -606,6 +624,8 @@ const dropRef = ref<HTMLElement | null>(null)
 const selectedId = ref<string | null>(null)
 const canvasWrapRef = ref<HTMLElement | null>(null)
 const canvasInnerRef = ref<HTMLElement | null>(null)
+const liveCanvasVersion = ref(0)
+let liveCanvasRO: ResizeObserver | null = null
 const rulerTopRef = ref<HTMLElement | null>(null)
 const rulerLeftRef = ref<HTMLElement | null>(null)
 
@@ -617,6 +637,36 @@ const designSize = computed(() => {
   const w = Math.max(1, Math.floor(Number(config.design?.width) || DESIGN.width))
   const h = Math.max(1, Math.floor(Number(config.design?.height) || DESIGN.height))
   return { width: Number.isFinite(w) ? w : DESIGN.width, height: Number.isFinite(h) ? h : DESIGN.height }
+})
+
+/**
+ * editor 预览缩放系数：
+ * - 基于「画布实际像素 / 设计稿尺寸」计算
+ * - 仅作用于 live 渲染层，用于让 px 字号/线宽观感更接近 runtime
+ */
+const editorLiveScale = computed(() => {
+  // 依赖 liveCanvasVersion，确保 ResizeObserver 触发后重算
+  liveCanvasVersion.value
+  const wrap = canvasWrapRef.value
+  const dw = designSize.value.width
+  const dh = designSize.value.height
+  if (!wrap || dw <= 0 || dh <= 0) return 1
+  const sx = wrap.clientWidth / dw
+  const sy = wrap.clientHeight / dh
+  const s = Math.min(sx, sy)
+  if (!Number.isFinite(s) || s <= 0) return 1
+  return Math.max(0.1, s)
+})
+
+const widgetLiveInnerStyle = computed<Record<string, string>>(() => {
+  const s = editorLiveScale.value
+  if (Math.abs(s - 1) < 0.001) return {} as Record<string, string>
+  return {
+    transform: `scale(${s})`,
+    transformOrigin: 'left top',
+    width: `${100 / s}%`,
+    height: `${100 / s}%`
+  }
 })
 
 /** 主区域外壳：按设计尺寸宽高比等比例显示，并适应主区域不溢出 */
@@ -676,6 +726,17 @@ function widgetFrameStyle(w: WidgetConfig2D): Record<string, string> {
     width: (ww / dw) * 100 + '%',
     height: (wh / dh) * 100 + '%'
   }
+}
+
+/**
+ * 编辑器中的 ECharts（chart/glassChart）在容器尺寸变化时偶发不触发内部 resize。
+ * 这里在关键尺寸变更时更新 key，确保重建并得到正确画布尺寸。
+ */
+function widgetLiveKey(w: WidgetConfig2D): string {
+  if (w.type === 'chart' || w.type === 'glassChart') {
+    return `${w.id}:${w.layout.width}x${w.layout.height}:v${liveCanvasVersion.value}`
+  }
+  return w.id
 }
 
 const resizeHandles: { key: string; pos: string; cursor: string }[] = [
@@ -832,6 +893,13 @@ onMounted(async () => {
     })
   }
   document.addEventListener('keydown', onEditorKeydown)
+  const target = canvasInnerRef.value ?? canvasWrapRef.value
+  if (target) {
+    liveCanvasRO = new ResizeObserver(() => {
+      liveCanvasVersion.value++
+    })
+    liveCanvasRO.observe(target)
+  }
 })
 
 function onDragStart(e: DragEvent, item: RegisteredWidgetDef) {
@@ -953,6 +1021,11 @@ function widgetLabel(w: WidgetConfig2D) {
   return typeLabelByType.value[w.type] || w.type
 }
 
+/** 实时渲染 props：默认 props + 当前实例 props（用于配置缺省时仍可正常渲染） */
+function getWidgetLiveProps(w: WidgetConfig2D): Record<string, unknown> {
+  return { ...getWidgetDefaultProps(w.type), ...(w.props ?? {}) }
+}
+
 function showWarnToast(text: string): void {
   if (mergeToastTimer) {
     clearTimeout(mergeToastTimer)
@@ -1023,6 +1096,8 @@ onUnmounted(() => {
   if (datasourceProbeHintTimer) clearTimeout(datasourceProbeHintTimer)
   datasourceProbeHintTimer = null
   document.removeEventListener('keydown', onEditorKeydown)
+  liveCanvasRO?.disconnect()
+  liveCanvasRO = null
   if (mergeToastTimer) {
     clearTimeout(mergeToastTimer)
     mergeToastTimer = null
@@ -1368,6 +1443,33 @@ async function loadWorkshopConfig() {
   box-sizing: border-box;
   pointer-events: none;
 }
+.panelx-editor-widgets-layer {
+  z-index: 2;
+}
+.panelx-editor-widgets-live-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 1;
+}
+.panelx-editor-widget-live {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: auto;
+  bottom: auto;
+}
+.panelx-editor-widget-live-inner {
+  width: 100%;
+  height: 100%;
+}
+.panelx-editor-widget-live :deep(*) {
+  pointer-events: none;
+}
 .panelx-editor-widgets-layer > .panelx-editor-widget-placeholder {
   pointer-events: auto;
 }
@@ -1381,7 +1483,7 @@ async function loadWorkshopConfig() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
+  background: transparent;
   left: 0;
   top: 0;
   right: auto;
@@ -1395,21 +1497,10 @@ async function loadWorkshopConfig() {
   z-index: 5;
 }
 .panelx-editor-placeholder-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  pointer-events: none;
+  display: none;
 }
 .panelx-editor-placeholder-default {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  padding: 0.5rem;
-  pointer-events: none;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.75rem;
+  display: none;
 }
 .panelx-editor-placeholder-icon {
   font-size: 1.5rem;

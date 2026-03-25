@@ -68,6 +68,26 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
       { key: 'background', label: '背景', type: 'string', default: 'transparent' }
     ]
   },
+  topBarTime: {
+    defaultProps: {
+      background: 'transparent'
+    },
+    propConfig: [
+      { key: 'background', label: '背景', type: 'string', default: 'transparent' }
+    ]
+  },
+  topBarClimate: {
+    defaultProps: {
+      temperature: '25℃',
+      humidity: '50%rh',
+      background: 'transparent'
+    },
+    propConfig: [
+      { key: 'temperature', label: '温度', type: 'string', default: '25℃' },
+      { key: 'humidity', label: '湿度', type: 'string', default: '50%rh' },
+      { key: 'background', label: '背景', type: 'string', default: 'transparent' }
+    ]
+  },
   glassChart: {
     defaultProps: {
       title: '图表',

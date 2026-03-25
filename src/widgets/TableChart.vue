@@ -212,7 +212,7 @@ const filteredRows = computed(() => internalRows.value)
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0.625rem;
 }
 
 .panelx-tableChart__table {
@@ -222,7 +222,7 @@ const filteredRows = computed(() => internalRows.value)
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: rgba(0, 0, 0, 0.12);
 }
 
@@ -232,13 +232,13 @@ const filteredRows = computed(() => internalRows.value)
 }
 
 .panelx-tableChart__thead {
-  padding: 8px 10px;
+  padding: 0.5rem 0.625rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
 }
 
 .panelx-tableChart__th {
-  font-size: 11px;
+  font-size: var(--px-font-size-sm, 0.6875rem);
   color: rgba(255, 255, 255, 0.7);
   white-space: nowrap;
   overflow: hidden;
@@ -250,7 +250,7 @@ const filteredRows = computed(() => internalRows.value)
 }
 
 .panelx-tableChart__tr {
-  padding: 9px 10px;
+  padding: 0.5625rem 0.625rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -259,7 +259,7 @@ const filteredRows = computed(() => internalRows.value)
 }
 
 .panelx-tableChart__td {
-  font-size: 12px;
+  font-size: var(--px-font-size-md, 0.75rem);
   color: rgba(255, 255, 255, 0.86);
   white-space: nowrap;
   overflow: hidden;
@@ -275,10 +275,10 @@ const filteredRows = computed(() => internalRows.value)
   --badge: #2584ff;
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 6px;
-  font-size: 11px;
+  height: 1.25rem;
+  padding: 0 0.5rem;
+  border-radius: 0.375rem;
+  font-size: var(--px-font-size-sm, 0.6875rem);
   color: rgba(255, 255, 255, 0.92);
   border: 1px solid color-mix(in srgb, var(--badge) 55%, transparent);
   background: color-mix(in srgb, var(--badge) 16%, transparent);

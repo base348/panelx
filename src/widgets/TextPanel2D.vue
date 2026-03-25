@@ -100,7 +100,7 @@ const normalizedSections = computed(() => {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .panelx-textPanel2d__section {
@@ -109,7 +109,7 @@ const normalizedSections = computed(() => {
 
 .panelx-textPanel2d__content {
   color: rgba(255, 255, 255, 0.78);
-  font-size: 12px;
+  font-size: var(--px-font-size-md, 0.75rem);
   line-height: 1.6;
 }
 

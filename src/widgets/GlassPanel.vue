@@ -135,6 +135,9 @@ const panelStyle = computed(() => {
   --px-panel-title-cn: #ffffff;
   --px-panel-title-en: #6586b5;
   --px-panel-fold: #6586b5;
+  --px-font-size-xs: 0.5rem;
+  --px-font-size-sm: 0.6875rem;
+  --px-font-size-md: 0.75rem;
 
   --px-panel-title-underline: #5298ff;
   --px-panel-title-underline-shadow: 0 1px 2px rgba(82, 152, 255, 0.2);
@@ -200,7 +203,7 @@ const panelStyle = computed(() => {
 
 /* 主标题 */
 .panelx-glass-panel-title-cn {
-  font-size: 12px;
+  font-size: var(--px-font-size-md);
   color: var(--px-panel-title-cn);
   font-weight: 400;
   letter-spacing: 0.5px;
@@ -209,7 +212,7 @@ const panelStyle = computed(() => {
 
 /* 副标题 */
 .panelx-glass-panel-sub-title {
-  font-size: 8px;
+  font-size: var(--px-font-size-xs);
   color: var(--px-panel-title-en);
   text-transform: uppercase;
   font-family: "Roboto", "Arial", sans-serif;

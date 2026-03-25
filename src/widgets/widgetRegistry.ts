@@ -12,6 +12,8 @@ import Card from './Card.vue'
 import Panel from './Panel.vue'
 import ScreenTitle from './ScreenTitle.vue'
 import TopBar from './TopBar.vue'
+import TopBarTime from './TopBarTime.vue'
+import TopBarClimate from './TopBarClimate.vue'
 import GlassChart from './GlassChart.vue'
 import TextPanel2D from './TextPanel2D.vue'
 import DeviceCard from './DeviceCard.vue'
@@ -30,6 +32,8 @@ export const widgetComponentMap: Record<WidgetType2D, unknown> = {
   panel: Panel,
   screenTitle: ScreenTitle,
   topBar: TopBar,
+  topBarTime: TopBarTime,
+  topBarClimate: TopBarClimate,
   glassChart: GlassChart,
   textPanel2D: TextPanel2D,
   tableChart: TableChart,

@@ -6,11 +6,12 @@
   ],
   "registeredWidgets": [
     { "type": "screenTitle", "label": "大屏标题", "defaultSize": { "width": 1920, "height": 80 }, "sampleImage": "widget_title.png" },
-    { "type": "topBar", "label": "顶栏", "defaultSize": { "width": 1920, "height": 48 }, "sampleImage": "" },
+    { "type": "topBarTime", "label": "时间组件", "defaultSize": { "width": 420, "height": 48 }, "sampleImage": "" },
+    { "type": "topBarClimate", "label": "温湿度组件", "defaultSize": { "width": 280, "height": 48 }, "sampleImage": "" },
     { "type": "stat", "label": "指标", "defaultSize": { "width": 280, "height": 100 }, "sampleImage": "" },
     { "type": "chart", "label": "图表", "defaultSize": { "width": 480, "height": 280 }, "sampleImage": "" },
     { "type": "glassChart", "label": "玻璃图表", "defaultSize": { "width": 380, "height": 220 }, "sampleImage": "widget_chart_bar.png" },
-    { "type": "textPanel2D", "label": "文字面板", "defaultSize": { "width": 340, "height": 220 }, "sampleImage": "" },
+    { "type": "textPanel2D", "label": "文字面板", "defaultSize": { "width": 340, "height": 220 }, "sampleImage": "widget_text_panel.png" },
     { "type": "tableChart", "label": "数据列表(table_chart)", "defaultSize": { "width": 340, "height": 260 }, "sampleImage": "" },
     { "type": "table", "label": "表格", "defaultSize": { "width": 400, "height": 260 }, "sampleImage": "" },
     { "type": "card", "label": "卡片", "defaultSize": { "width": 320, "height": 180 }, "sampleImage": "" },
@@ -106,6 +107,8 @@
         "items": [{ "label": "项1", "value": "100", "percent": 60 }, { "label": "项2", "value": "200", "percent": 80 }]
       },
       "screenTitle": { "text": "大屏标题" },
+      "topBarTime": { "background": "transparent" },
+      "topBarClimate": { "temperature": "25℃", "humidity": "50%rh", "background": "transparent" },
       "topBar": { "datetime": "", "temperature": "25℃", "humidity": "50%rh", "background": "transparent" },
       "bottomNav": { "items": [{ "label": "首页", "icon": "▸", "active": true }, { "label": "数据", "icon": "" }] },
       "infoBox2D": {
