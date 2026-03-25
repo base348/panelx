@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import GlassPanel from './GlassPanel.vue'
 
 export type TableChartColumn = {
@@ -68,6 +68,8 @@ export type TableChartColumn = {
 }
 
 type Row = Record<string, any>
+
+export type TableChartUpdateMode = 'replace' | 'append'
 
 const props = withDefaults(
   defineProps<{
@@ -86,6 +88,14 @@ const props = withDefaults(
     columns?: TableChartColumn[]
     /** 数据 */
     rows?: Row[]
+    /** 最大展示条数（防止出现滚动条） */
+    maxRows?: number
+    /**
+     * 更新模式：
+     * - replace：把 rows 当作全量数据，直接替换展示
+     * - append：把 rows 当作增量数据，追加到内部列表并按 maxRows 截断（滚动更新）
+     */
+    updateMode?: TableChartUpdateMode
 
     /** 哪个字段渲染成彩色 badge（如 “等级/类别”） */
     badgeKey?: string
@@ -100,6 +110,8 @@ const props = withDefaults(
     panelOpacity: undefined,
     panelBorderVisible: true,
     panelBorderOpacity: undefined,
+    maxRows: 6,
+    updateMode: 'replace',
     columns: () => [
       { key: 'levelName', title: '报警等级', width: '72px', align: 'left' },
       { key: 'part', title: '检修部位', width: 'auto', align: 'left' },
@@ -133,7 +145,59 @@ const gridTemplate = computed(() => {
     .join(' ')
 })
 
-const filteredRows = computed(() => props.rows ?? [])
+function normalizeMaxRows(v: unknown): number {
+  const n = Math.floor(Number(v))
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, n)
+}
+
+const internalRows = ref<Row[]>([])
+
+watch(
+  () => props.rows,
+  (rows) => {
+    const incoming = Array.isArray(rows) ? rows : []
+    const max = normalizeMaxRows(props.maxRows)
+    if (max <= 0) {
+      internalRows.value = []
+      return
+    }
+
+    if (props.updateMode === 'append') {
+      // 将 incoming 视为增量追加（支持一次推多条）
+      const next = internalRows.value.concat(incoming)
+      internalRows.value = next.slice(Math.max(0, next.length - max))
+      return
+    }
+
+    // replace：将 incoming 视为全量
+    internalRows.value = incoming.slice(0, max)
+  },
+  { immediate: true }
+)
+
+// maxRows 变小后即时截断
+watch(
+  () => props.maxRows,
+  () => {
+    const max = normalizeMaxRows(props.maxRows)
+    if (max <= 0) internalRows.value = []
+    else if (internalRows.value.length > max) internalRows.value = internalRows.value.slice(0, max)
+  }
+)
+
+// 模式切换到 replace 时，立即用当前 props.rows 覆盖内部列表（避免残留 append 历史）
+watch(
+  () => props.updateMode,
+  (m) => {
+    if (m !== 'replace') return
+    const incoming = Array.isArray(props.rows) ? props.rows : []
+    const max = normalizeMaxRows(props.maxRows)
+    internalRows.value = max > 0 ? incoming.slice(0, max) : []
+  }
+)
+
+const filteredRows = computed(() => internalRows.value)
 </script>
 
 <style scoped>
@@ -182,7 +246,7 @@ const filteredRows = computed(() => props.rows ?? [])
 }
 
 .panelx-tableChart__tbody {
-  overflow: auto;
+  overflow: hidden;
 }
 
 .panelx-tableChart__tr {

@@ -138,6 +138,8 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
       panelBorderOpacity: 0.6,
       panelShadowVisible: true,
       panelShadowOpacity: 1,
+      maxRows: 6,
+      updateMode: 'replace',
       columns: [
         { key: 'levelName', title: '报警等级', width: '72px', align: 'left' },
         { key: 'part', title: '检修部位', width: 'auto', align: 'left' },
@@ -162,6 +164,8 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
       { key: 'panelBorderOpacity', label: '边框透明度(0-1)', type: 'number', default: 0.6 },
       { key: 'panelShadowVisible', label: '显示阴影', type: 'boolean', default: true },
       { key: 'panelShadowOpacity', label: '阴影强度(0-1)', type: 'number', default: 1 },
+      { key: 'maxRows', label: '最大条数', type: 'number', default: 6 },
+      { key: 'updateMode', label: '更新模式(replace/append)', type: 'string', default: 'replace' },
       { key: 'columns', label: '列配置', type: 'array', default: [] },
       { key: 'rows', label: '数据行', type: 'array', default: [] },
       { key: 'badgeKey', label: 'Badge 字段', type: 'string', default: 'levelName' },

@@ -69,6 +69,8 @@
         "panelBorderOpacity": 0.6,
         "panelShadowVisible": true,
         "panelShadowOpacity": 1,
+        "maxRows": 6,
+        "updateMode": "replace",
         "columns": [
           { "key": "levelName", "title": "报警等级", "width": "72px", "align": "left" },
           { "key": "part", "title": "检修部位", "width": "auto", "align": "left" },
