@@ -1,10 +1,17 @@
 import type { ControlPush, ControlSource, ControlSourceStatus } from '../../types'
+import { formatDataChainDetail } from '../../core/comm/dataChainLog'
 import { normalizeControlEnvelope } from './normalizers'
+
+/** 与 server/sse-server.mjs 的 `event: domain_action` 及 `open` 等命名事件对齐；否则仅 `onmessage` 收不到 `2d_chart` 等 */
+export const DEFAULT_SSE_NAMED_EVENTS = ['open', '2d_chart', '2d_other', '3d_command', 'meta_connected'] as const
 
 export type SSESourceOptions = {
   sourceId: string
   url: string
+  /** 若只监听单一命名事件（默认不设置） */
   eventName?: string
+  /** 除 `message` 外额外监听的 SSE 事件名（与测试服务 `event:` 一致） */
+  namedEvents?: readonly string[]
   reconnectMs?: number
   maxReconnectMs?: number
   parseMessage?: (message: MessageEvent<string>, eventName?: string) => unknown | unknown[]
@@ -15,6 +22,7 @@ export class SSESource implements ControlSource {
   readonly id: string
   private readonly url: string
   private readonly eventName?: string
+  private readonly namedEvents: readonly string[]
   private readonly reconnectMs: number
   private readonly maxReconnectMs: number
   private readonly parseMessage: (message: MessageEvent<string>, eventName?: string) => unknown | unknown[]
@@ -30,6 +38,7 @@ export class SSESource implements ControlSource {
     this.id = options.sourceId
     this.url = options.url
     this.eventName = options.eventName
+    this.namedEvents = options.namedEvents ?? DEFAULT_SSE_NAMED_EVENTS
     this.reconnectMs = Math.max(200, Math.trunc(options.reconnectMs ?? 1000))
     this.maxReconnectMs = Math.max(this.reconnectMs, Math.trunc(options.maxReconnectMs ?? 15000))
     this.retryMs = this.reconnectMs
@@ -99,17 +108,31 @@ export class SSESource implements ControlSource {
         p(env)
         receivedCount += 1
       }
+      const evType = (event as MessageEvent).type || 'message'
+      const raw = typeof event.data === 'string' ? event.data : String(event.data ?? '')
       this.logger({
         type: 'sse_data_received',
         sourceId: this.id,
-        eventName: this.eventName ?? 'message',
-        rawLength: typeof event.data === 'string' ? event.data.length : 0,
-        envelopeCount: receivedCount
+        eventType: evType,
+        eventName: this.eventName ?? evType,
+        rawLength: raw.length,
+        envelopeCount: receivedCount,
+        rawData: formatDataChainDetail(raw, 16000)
       })
     }
 
-    if (this.eventName) es.addEventListener(this.eventName, handler as EventListener)
-    else es.onmessage = handler
+    if (this.eventName) {
+      es.addEventListener(this.eventName, handler as EventListener)
+    } else {
+      es.addEventListener('message', handler as EventListener)
+      const seen = new Set<string>()
+      for (const name of this.namedEvents) {
+        const n = String(name ?? '').trim()
+        if (!n || n === 'message' || seen.has(n)) continue
+        seen.add(n)
+        es.addEventListener(n, handler as EventListener)
+      }
+    }
 
     es.onerror = () => {
       if (this.currentStatus === 'stopped') return

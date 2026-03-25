@@ -47,6 +47,7 @@ import { resolveDatasourceUrl } from '../utils/resolveDatasourceUrl'
 import type {
   DashboardConfig,
   WidgetConfig2D,
+  WidgetConfig3D,
   WidgetType2D,
   BackgroundLayerImage
 } from '../types/dashboard'
@@ -61,7 +62,7 @@ import {
   UpdateWidgetKey,
   WidgetRefreshVersionKey
 } from '../types/injections'
-import { dataChainLog } from '../core/comm/dataChainLog'
+import { dataChainLog, formatDataChainDetail } from '../core/comm/dataChainLog'
 import Scene3DFramework from './Scene3DFramework.vue'
 import { getWidgetComponent } from '../widgets'
 import { widgets3DToScene3DConfig } from '../utils/widgets3DToScene3D'
@@ -164,7 +165,8 @@ function updateWidgetData(instanceId: string, patch: Record<string, unknown>) {
   widgetData.value = { ...widgetData.value, [instanceId]: { ...(cur ?? {}), ...patch } }
   dataChainLog('Dashboard.updateWidgetData', {
     instanceId,
-    patchKeys: Object.keys(patch)
+    patchKeys: Object.keys(patch),
+    patch: formatDataChainDetail(patch, 16000)
   })
 }
 /** 触发某 widget 刷新展示（外部在更新数据后可调用，widget 通过 watch widgetRefreshVersion 重绘） */
@@ -202,8 +204,13 @@ function parseRouteToken(token: string): { domain: ControlDomain; action: Contro
   return { domain, action }
 }
 
-function toPayloadByRoute(widget: WidgetConfig2D, route: { domain: ControlDomain; action: ControlAction }, data: unknown): ControlPayload | null {
+function toPayloadByRoute(
+  widget: WidgetConfig2D | null,
+  route: { domain: ControlDomain; action: ControlAction },
+  data: unknown
+): ControlPayload | null {
   if (route.domain === '2d') {
+    if (!widget) return null
     const patch =
       route.action === 'chart' || widget.type === 'chart' || widget.type === 'glassChart'
         ? ({ options: data } as Record<string, unknown>)
@@ -257,15 +264,41 @@ async function ensureGlobalDatasource(dsConfig: BackendDataSourceConfig): Promis
                 } catch {
                   parsed = null
                 }
-                if (!parsed) return []
+                if (!parsed || typeof parsed !== 'object') return []
+
+                const rec = parsed as Record<string, unknown>
+                /** 与 server/data/*.json 一致：{ header: { route: { domain, action } }, payload: [{ widgetId, payload }] } */
+                const header = rec.header as Record<string, unknown> | undefined
+                const routeBlock = header?.route as { domain?: string; action?: string } | undefined
+                const payloadArr = rec.payload
+
+                if (routeBlock && Array.isArray(payloadArr)) {
+                  const domain = String(routeBlock.domain ?? '2d').toLowerCase()
+                  const action = String(routeBlock.action ?? 'other').toLowerCase()
+                  const route = parseRouteToken(`${domain}_${action}`)
+                  if (!route) return []
+                  const out: RoutedSourceData[] = []
+                  for (const row of payloadArr) {
+                    if (!row || typeof row !== 'object') continue
+                    const r = row as Record<string, unknown>
+                    const targetId = String(r.widgetId ?? r.id ?? '').trim()
+                    if (!targetId) continue
+                    out.push({ targetId, route, data: r.payload })
+                  }
+                  return out.map((it) => ({
+                    header: { domain: it.route.domain, action: it.route.action },
+                    payload: { kind: 'widget', widgetId: '__route_only__', patch: { __routed: it } }
+                  }))
+                }
+
                 const list = Array.isArray(parsed) ? parsed : [parsed]
                 const out: RoutedSourceData[] = []
                 for (const item of list) {
-                  const rec = item as Record<string, unknown>
-                  const targetId = String(rec.widgetId ?? rec.id ?? '').trim()
-                  const route = parseRouteToken(String(rec.event ?? ''))
+                  const row = item as Record<string, unknown>
+                  const targetId = String(row.widgetId ?? row.id ?? '').trim()
+                  const route = parseRouteToken(String(row.event ?? ''))
                   if (!targetId || !route) continue
-                  out.push({ targetId, route, data: rec.payload })
+                  out.push({ targetId, route, data: row.payload })
                 }
                 return out.map((it) => ({
                   header: { domain: it.route.domain, action: it.route.action },
@@ -361,20 +394,25 @@ function pickActiveDatasource(list: BackendDataSourceConfig[]): BackendDataSourc
   return list[0] ?? null
 }
 
-/** 将 config.widgets2D 绑定到活动 datasource：按 targetId(=widgetId/id) 路由 */
+/** 将活动 datasource 绑定到 dataEngine：按 targetId 路由到 2D 组件或 3D 实例（widgetId / id） */
 async function setupDataSourceConnector() {
   await cleanupConnectorState()
 
   const list = props.datasources ?? []
   const activeDatasource = pickActiveDatasource(list)
-  const widgets = config.value.widgets2D ?? []
-  const widgetById = new Map<string, WidgetConfig2D>()
-  for (const w of widgets) {
+  const widgets2d = config.value.widgets2D ?? []
+  const widgets3d = config.value.widgets3D ?? []
+  const widget2DById = new Map<string, WidgetConfig2D>()
+  for (const w of widgets2d) {
     const wid = String(w.id ?? '').trim()
-    if (wid) widgetById.set(wid, w)
+    if (wid) widget2DById.set(wid, w)
   }
-  const bound = widgets
-  if (!activeDatasource || bound.length === 0) return
+  const widget3DById = new Map<string, WidgetConfig3D>()
+  for (const w of widgets3d) {
+    const wid = String(w.id ?? '').trim()
+    if (wid) widget3DById.set(wid, w)
+  }
+  if (!activeDatasource || (widget2DById.size === 0 && widget3DById.size === 0)) return
 
   const dsConfig = activeDatasource
   await ensureGlobalDatasource(dsConfig)
@@ -384,11 +422,39 @@ async function setupDataSourceConnector() {
     start: async (push) => {
       const unsub = await globalDatasourceRegistry.subscribe(dsConfig.key, (data) => {
         const routed = data as RoutedSourceData
-        const targetWidget = routed.targetId ? widgetById.get(routed.targetId) : undefined
-        if (!targetWidget) return
-        const payload = toPayloadByRoute(targetWidget, routed.route, routed.data)
-        if (!payload) return
-        push(toControlEnvelope(sourceId, routed.route, payload))
+        const tid = routed.targetId ? String(routed.targetId).trim() : ''
+        if (!tid) return
+        if (routed.route.domain === '2d') {
+          const w2 = widget2DById.get(tid)
+          if (!w2) return
+          const payload = toPayloadByRoute(w2, routed.route, routed.data)
+          if (!payload) return
+          dataChainLog('Dashboard.connector.routed', {
+            datasourceKey: dsConfig.key,
+            domain: routed.route.domain,
+            action: routed.route.action,
+            targetId: tid,
+            widgetType: w2.type,
+            data: formatDataChainDetail(routed.data, 16000),
+            payloadKind: payload.kind
+          })
+          push(toControlEnvelope(sourceId, routed.route, payload))
+          return
+        }
+        if (routed.route.domain === '3d') {
+          if (!widget3DById.has(tid)) return
+          const payload = toPayloadByRoute(null, routed.route, routed.data)
+          if (!payload) return
+          dataChainLog('Dashboard.connector.routed', {
+            datasourceKey: dsConfig.key,
+            domain: routed.route.domain,
+            action: routed.route.action,
+            targetId: tid,
+            data: formatDataChainDetail(routed.data, 16000),
+            payloadKind: payload.kind
+          })
+          push(toControlEnvelope(sourceId, routed.route, payload))
+        }
       })
       sourceUnsubs.set(sourceId, unsub)
     },
@@ -401,7 +467,8 @@ async function setupDataSourceConnector() {
   engineSourceIds.add(sourceId)
   dataChainLog('Dashboard.connector.bind', {
     datasourceKey: dsConfig.key,
-    widgetCount: widgets.length,
+    widgets2DCount: widget2DById.size,
+    widgets3DCount: widget3DById.size,
     mode: 'targetId-only'
   })
   void dataEngine.start()
@@ -511,7 +578,12 @@ function getComponent(type: WidgetType2D) {
 }
 
 watch(
-  () => [props.config?.widgets2D?.length ?? 0, props.datasources?.length ?? 0] as const,
+  () =>
+    [
+      props.config?.widgets2D?.length ?? 0,
+      props.config?.widgets3D?.length ?? 0,
+      props.datasources?.length ?? 0
+    ] as const,
   () => void setupDataSourceConnector(),
   { immediate: true }
 )
