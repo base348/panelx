@@ -187,7 +187,16 @@ const dataEngine = new SceneControlStreamEngine(undefined, undefined, {
     updateWidgetData(payload.widgetId, payload.patch)
     if (payload.refresh !== false) updateWidget(payload.widgetId)
   },
-  commandSink: (request) => scene3dBgRef.value?.executeCommand?.(request),
+  commandSink: (request: CommandRequest) => {
+    const scene = scene3dBgRef.value as { executeCommand?: (r: CommandRequest) => void } | null
+    dataChainLog('Dashboard.commandExecute', {
+      key: request.key,
+      targetModelId: request.id,
+      params: formatDataChainDetail(request.params ?? null, 8000),
+      sceneReady: Boolean(scene && typeof scene.executeCommand === 'function')
+    })
+    scene?.executeCommand?.(request)
+  },
   propertySink: (request) => scene3dBgRef.value?.executeProperty?.(request)
 })
 const dashboardOwnerId = `dashboard_${Math.random().toString(36).slice(2)}`
@@ -267,7 +276,7 @@ async function ensureGlobalDatasource(dsConfig: BackendDataSourceConfig): Promis
                 if (!parsed || typeof parsed !== 'object') return []
 
                 const rec = parsed as Record<string, unknown>
-                /** 与 server/data/*.json 一致：{ header: { route: { domain, action } }, payload: [{ widgetId, payload }] } */
+                /** 与 server/data/*_enable.json 一致：{ header: { route: { domain, action } }, payload: [{ widgetId, payload }] } */
                 const header = rec.header as Record<string, unknown> | undefined
                 const routeBlock = header?.route as { domain?: string; action?: string } | undefined
                 const payloadArr = rec.payload

@@ -36,6 +36,7 @@ import { CommandManager } from '../utils/CommandManager'
 import { PropertyManager } from '../utils/PropertyManager'
 import { SceneControlStreamEngine } from '../utils/SceneControlStreamEngine'
 import type { CommandRequest, PropertyRequest } from '../types'
+import { dataChainLog, formatDataChainDetail } from '../core/comm/dataChainLog'
 import { register3DCommandHandlers, register3DPropertyHandlers } from '../utils/manager3DRegistry'
 import { create3DPropertyHandlers } from '../utils/manager3DHandlers'
 import { create3DCommandHandlers } from '../utils/manager3DCommandHandlers'
@@ -49,7 +50,8 @@ const containerRef = ref<HTMLElement | null>(null)
 const containerId = computed(() => `panelx-3d-framework-${Math.random().toString(36).slice(2, 10)}`)
 let worldInstance: World | null = null
 let resizeObserver: ResizeObserver | null = null
-let loaderStore: any | null = null
+/** 已挂入 storyboard 的模型实例（与 store.getModel 每次 clone 不同，命令/属性必须指向同一引用） */
+let runtimeSceneModelsById: Map<string, Model> | null = null
 /** starField 粒子 rAF 动画，卸载时 cancel */
 let disposeStarFieldAnim: (() => void) | null = null
 /** 圆形光点贴图，卸载时 dispose */
@@ -381,7 +383,8 @@ onMounted(() => {
       }
 
       const store = loader.getStore()
-      loaderStore = store
+      const sceneModelsById = new Map<string, Model>()
+      runtimeSceneModelsById = sceneModelsById
       const runtimeModels = useWidgets3DRuntime
         ? widgets3DConfig.map((w) => ({ id: w.id, visible: w.visible, layer: w.layer }))
         : modelsConfig.map((m) => ({ id: m.id, visible: m.visible, layer: m.layer }))
@@ -432,6 +435,7 @@ onMounted(() => {
               model.scene.scale.setScalar(itemCfg.scale)
             }
           }
+          sceneModelsById.set(item.id, model)
           storyBoard.addModel(model)
         }
       }
@@ -549,23 +553,24 @@ register3DCommandHandlers(
   commandManager,
   create3DCommandHandlers({
     getModelById: (id: string) => {
-      const store = loaderStore
-      if (!store) return null
-      return store.getModel(id)
+      return runtimeSceneModelsById?.get(id) ?? null
     }
   })
 )
 
 function executeCommand(req: CommandRequest): void {
+  dataChainLog('Scene3DFramework.commandDispatch', {
+    key: req.key,
+    id: req.id,
+    params: formatDataChainDetail(req.params ?? null, 8000)
+  })
   commandManager.execute(req)
 }
 
 register3DPropertyHandlers(
   propertyManager,
   create3DPropertyHandlers((id: string) => {
-    const store = loaderStore
-    if (!store) return null
-    return store.getModel(id)
+    return runtimeSceneModelsById?.get(id) ?? null
   })
 )
 
@@ -585,6 +590,7 @@ defineExpose({
 
 onUnmounted(() => {
   void controlEngine.dispose()
+  runtimeSceneModelsById = null
   disposeStarFieldAnim?.()
   disposeStarFieldAnim = null
   starFieldPointTexture?.dispose()

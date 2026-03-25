@@ -1,12 +1,12 @@
 /**
- * 测试用 SSE 服务：读取 server/data/*.json 后按策略推送。
+ * 测试用 SSE 服务：读取 server/data/*_enable.json 后按策略推送。
  * 启动：pnpm run sse
  * 前端 /api/sse 通过 Vite proxy 转发到本服务
  */
 
 import { createServer } from 'http'
-import { readdirSync, readFileSync, existsSync } from 'fs'
-import { join, extname, basename } from 'path'
+import { readdirSync, readFileSync, existsSync, watch } from 'fs'
+import { join, basename } from 'path'
 import { fileURLToPath } from 'url'
 
 const PORT = Number(process.env.SSE_PORT) || 3001
@@ -52,7 +52,10 @@ function normalizeDataset(fileName, raw) {
 
 function loadDatasets() {
   if (!existsSync(DATA_DIR)) return []
-  const files = readdirSync(DATA_DIR).filter((name) => extname(name).toLowerCase() === '.json')
+  const files = readdirSync(DATA_DIR).filter((name) => {
+    const lower = name.toLowerCase()
+    return lower.endsWith('_enable.json')
+  })
   const list = []
   for (const file of files) {
     const fullPath = join(DATA_DIR, file)
@@ -67,7 +70,86 @@ function loadDatasets() {
   return list
 }
 
-const datasets = loadDatasets()
+/** 当前内存中的数据集；文件变更后会 reload */
+let datasets = loadDatasets()
+
+/** 已建立的 SSE 长连接：重载时停旧定时器并重新 startDatasetStream */
+const activeSseConnections = new Set()
+
+let reloadDebounceTimer = null
+const RELOAD_DEBOUNCE_MS = 250
+
+function isDataEnableFile(name) {
+  return String(name ?? '')
+    .toLowerCase()
+    .endsWith('_enable.json')
+}
+
+function reloadDatasetsAndRestartStreams() {
+  datasets = loadDatasets()
+  console.log(`[SSE] Datasets reloaded: ${datasets.length} file(s)`)
+
+  for (const conn of [...activeSseConnections]) {
+    if (conn.res.writableEnded) {
+      activeSseConnections.delete(conn)
+      continue
+    }
+    for (const stop of conn.stoppers) {
+      try {
+        stop()
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    conn.stoppers = []
+    try {
+      sendSSE(conn.res, 'open', {
+        header: {
+          route: { domain: 'meta', action: 'connected' },
+          strategy: { datasetCount: datasets.length, reloaded: true }
+        },
+        payload: [{ message: 'SSE datasets reloaded', ts: Date.now() }]
+      })
+    } catch (err) {
+      console.warn(`[SSE] Reload notify failed, dropping connection: ${String(err)}`)
+      try {
+        conn.res.end()
+      } catch (_) {
+        /* ignore */
+      }
+      activeSseConnections.delete(conn)
+      continue
+    }
+    conn.stoppers = datasets.map((dataset) => startDatasetStream(conn.res, dataset))
+  }
+}
+
+function scheduleReloadFromWatch(eventType, filename) {
+  if (filename != null && filename !== '' && !isDataEnableFile(filename)) {
+    return
+  }
+  if (process.env.DATA_CHAIN_LOG !== '0') {
+    console.log(`${LOG_PREFIX} data/watch ${eventType} ${filename ?? '(dir)'}`)
+  }
+  if (reloadDebounceTimer) clearTimeout(reloadDebounceTimer)
+  reloadDebounceTimer = setTimeout(() => {
+    reloadDebounceTimer = null
+    reloadDatasetsAndRestartStreams()
+  }, RELOAD_DEBOUNCE_MS)
+}
+
+if (existsSync(DATA_DIR)) {
+  try {
+    const watcher = watch(DATA_DIR, { persistent: true }, (eventType, filename) => {
+      scheduleReloadFromWatch(eventType, filename)
+    })
+    watcher.on('error', (err) => {
+      console.error('[SSE] fs.watch error:', err)
+    })
+  } catch (err) {
+    console.warn('[SSE] fs.watch not available:', err)
+  }
+}
 
 function sendSSE(res, event, data) {
   const encoded = JSON.stringify(data)
@@ -76,6 +158,25 @@ function sendSSE(res, event, data) {
   }
   res.write(`event: ${event}\n`)
   res.write(`data: ${encoded}\n\n`)
+}
+
+/**
+ * 下发给客户端的 header：3d/command 不附带 strategy（仅服务端调度用）；2d 等仍附带便于联调观察。
+ */
+function buildClientHeader(dataset, strategy, cursor, totalLen) {
+  const route = dataset.header.route
+  if (dataset.event === '3d_command') {
+    return { route: { ...route } }
+  }
+  return {
+    route: { ...route },
+    strategy: {
+      ...strategy,
+      source: basename(dataset.fileName),
+      cursor,
+      total: totalLen
+    }
+  }
 }
 
 function startDatasetStream(res, dataset) {
@@ -91,15 +192,7 @@ function startDatasetStream(res, dataset) {
           : []
 
     sendSSE(res, dataset.event, {
-      header: {
-        route: dataset.header.route,
-        strategy: {
-          ...strategy,
-          source: basename(dataset.fileName),
-          cursor,
-          total: sourcePayload.length
-        }
-      },
+      header: buildClientHeader(dataset, strategy, cursor, sourcePayload.length),
       payload: nextPayload
     })
     cursor += 1
@@ -135,12 +228,14 @@ const server = createServer((req, res) => {
       payload: [{ message: 'SSE connected', ts: Date.now() }]
     })
 
-    const stoppers = datasets.map((dataset) => startDatasetStream(res, dataset))
+    const conn = { res, stoppers: datasets.map((dataset) => startDatasetStream(res, dataset)) }
+    activeSseConnections.add(conn)
     req.on('close', () => {
       if (process.env.DATA_CHAIN_LOG !== '0') {
         console.log(`${LOG_PREFIX} SSE.client closed`)
       }
-      stoppers.forEach((stop) => stop())
+      activeSseConnections.delete(conn)
+      conn.stoppers.forEach((stop) => stop())
     })
     return
   }
