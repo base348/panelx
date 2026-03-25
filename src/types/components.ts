@@ -86,17 +86,3 @@ export interface InfoBox2DProps {
   fx?: 'scanlines' | 'none' | string
   className?: string
 }
-
-export interface LeaderLines2DProps {
-  /** 起点（0-100，分别表示在 widget 矩形内的相对位置） */
-  origin?: { x: number; y: number }
-  /** 方向角度（度），0=向右，90=向下，-90=向上 */
-  angleDeg?: number
-  /** 线段长度（0-100，按 viewBox 坐标单位近似） */
-  length?: number
-  color?: string
-  width?: number
-  glowWidth?: number
-  fx?: 'glow' | 'none' | string
-  className?: string
-}

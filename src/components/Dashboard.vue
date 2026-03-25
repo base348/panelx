@@ -221,7 +221,9 @@ function toPayloadByRoute(
   if (route.domain === '2d') {
     if (!widget) return null
     const patch =
-      route.action === 'chart' || widget.type === 'chart' || widget.type === 'glassChart'
+      route.action === 'chart' ||
+      widget.type === 'chart' ||
+      widget.type === 'glassChart'
         ? ({ options: data } as Record<string, unknown>)
         : ((data as Record<string, unknown>) ?? {})
     return { kind: 'widget', widgetId: widget.id, patch, refresh: true }

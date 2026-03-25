@@ -1,15 +1,29 @@
 <template>
-  <div class="panelx-glass-panel">
-    <div v-if="title || subTitle" class="panelx-glass-panel-head">
-      <div class="panelx-glass-panel-titles">
-        <span v-if="title" class="panelx-glass-panel-title">{{ title }}</span>
-        <span v-if="subTitle" class="panelx-glass-panel-subtitle">{{ subTitle }}</span>
+  <div class="panelx-glass-panel" :class="`panelx-glass-panel-theme-${theme}`">
+    <!-- 顶部色条 -->
+    <div
+      v-if="showTab"
+      class="panelx-glass-panel-tab"
+      :class="`panelx-glass-panel-tab-${tabColor}`"
+    />
+
+    <!-- 头部 -->
+    <div class="panelx-glass-panel-header">
+      <div class="panelx-glass-panel-title">
+        <div class="panelx-glass-panel-title-cn">{{ title }}</div>
+        <div v-if="subTitle" class="panelx-glass-panel-sub-title">
+          {{ subTitle }}
+        </div>
       </div>
-      <span class="panelx-glass-panel-corner corner-tl" />
-      <span class="panelx-glass-panel-corner corner-tr" />
-      <span class="panelx-glass-panel-corner corner-bl" />
-      <span class="panelx-glass-panel-corner corner-br" />
+
+      <!-- 折叠按钮 -->
+      <div v-if="showFold" class="panelx-glass-panel-fold">
+        <span></span>
+        <span></span>
+      </div>
     </div>
+
+    <!-- 内容插槽 -->
     <div class="panelx-glass-panel-body">
       <slot />
     </div>
@@ -17,99 +31,154 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(
-  defineProps<{
-    title?: string
-    subTitle?: string
-  }>(),
-  {}
-)
+
+// TS 接口定义
+interface Props {
+  title?: string
+  subTitle?: string
+  /** 统一壳主题：同主题下配色/线条一致 */
+  theme?: 'hud'
+  tabColor?: 'blue' | 'cyan' | 'yellow' | 'green' | 'orange' | 'purple'
+  showTab?: boolean
+  showFold?: boolean
+}
+
+// ✅ 使用 withDefaults 设置默认值
+withDefaults(defineProps<Props>(), {
+  title: '',
+  subTitle: '',
+  theme: 'hud',
+  tabColor: 'blue',       // 默认蓝色
+  showTab: false,         // 默认不显示顶部色条
+  showFold: true          // 默认显示折叠按钮
+})
 </script>
 
 <style scoped>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 核心卡片 + theme token（CSS 变量） */
 .panelx-glass-panel {
-  position: relative;
+  /* theme tokens（默认 hud） */
+  --px-panel-bg: rgba(12, 26, 54, 0.75);
+  --px-panel-blur: 4px;
+  --px-panel-border: rgba(30, 59, 106, 0.6);
+  --px-panel-radius: 4px;
+  --px-panel-shadow-1: 0 0 0 1px rgba(82, 152, 255, 0.2);
+  --px-panel-shadow-2: 0 0 8px rgba(82, 152, 255, 0.25);
+  --px-panel-shadow-3: 0 0 18px rgba(30, 70, 130, 0.15);
+
+  --px-panel-title-cn: #ffffff;
+  --px-panel-title-en: #6586b5;
+  --px-panel-fold: #6586b5;
+
+  --px-panel-title-underline: #5298ff;
+  --px-panel-title-underline-shadow: 0 1px 2px rgba(82, 152, 255, 0.2);
+
+  --px-panel-tab-blue: #2584ff;
+  --px-panel-tab-cyan: #00e0f7;
+  --px-panel-tab-yellow: #f9d03f;
+  --px-panel-tab-green: #36cc85;
+  --px-panel-tab-orange: #ff9535;
+  --px-panel-tab-purple: #7c7cff;
+
   width: 100%;
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(10, 25, 47, 0.75);
-  border: 0.0625rem solid rgba(0, 212, 255, 0.4);
-  box-shadow: 0 0 0.75rem rgba(0, 212, 255, 0.15), inset 0 0 3.75rem rgba(0, 212, 255, 0.03);
+  background: var(--px-panel-bg);
+  backdrop-filter: blur(var(--px-panel-blur));
+  -webkit-backdrop-filter: blur(var(--px-panel-blur));
+  border: 1px solid var(--px-panel-border);
+  border-radius: var(--px-panel-radius);
   overflow: hidden;
+  box-shadow:
+    var(--px-panel-shadow-1),
+    var(--px-panel-shadow-2),
+    var(--px-panel-shadow-3);
   container-type: size;
   container-name: glass-panel;
 }
-.panelx-glass-panel-head {
-  flex-shrink: 0;
-  padding: 0.55rem 1.5rem 0.05rem;
-  border-bottom: 0.0625rem solid rgba(0, 212, 255, 0.25);
+
+/* 顶部色条 */
+.panelx-glass-panel-tab {
+  height: 6px;
+  width: 100%;
 }
-.panelx-glass-panel-titles {
+.panelx-glass-panel-tab-blue { background: var(--px-panel-tab-blue); }
+.panelx-glass-panel-tab-cyan { background: var(--px-panel-tab-cyan); }
+.panelx-glass-panel-tab-yellow { background: var(--px-panel-tab-yellow); }
+.panelx-glass-panel-tab-green { background: var(--px-panel-tab-green); }
+.panelx-glass-panel-tab-orange { background: var(--px-panel-tab-orange); }
+.panelx-glass-panel-tab-purple { background: var(--px-panel-tab-purple); }
+
+/* 头部 */
+.panelx-glass-panel-header {
+  flex-shrink: 0;
+  padding: 10px 16px;
   display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
 }
-/* 标题字号仅随容器高度缩放 */
+
+/* 标题区域 + 高亮下划线 */
 .panelx-glass-panel-title {
-  font-size: clamp(0.5rem, 4cqh, 1rem);
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 50px);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--px-panel-title-underline);
+  box-shadow: var(--px-panel-title-underline-shadow);
 }
-.panelx-glass-panel-subtitle {
-  font-size: clamp(0.4rem, 3cqh, 0.75rem);
-  font-weight: 500;
-  color: rgba(0, 212, 255, 0.75);
-  letter-spacing: 0.06em;
-  flex-shrink: 0;
+
+/* 主标题 */
+.panelx-glass-panel-title-cn {
+  font-size: 15px;
+  color: var(--px-panel-title-cn);
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
-.panelx-glass-panel-corner {
-  position: absolute;
-  width: 0.75rem;
-  height: 0.75rem;
-  border-color: rgba(0, 212, 255, 0.6);
-  border-style: solid;
-  border-width: 0;
+
+/* 副标题 */
+.panelx-glass-panel-sub-title {
+  font-size: 11px;
+  color: var(--px-panel-title-en);
+  text-transform: uppercase;
+  font-family: "Roboto", "Arial", sans-serif;
+  font-weight: 300;
+  letter-spacing: 1px;
 }
-.corner-tl {
-  top: 0.375rem;
-  left: 0.375rem;
-  border-top-width: 0.125rem;
-  border-left-width: 0.125rem;
+
+/* 折叠按钮 */
+.panelx-glass-panel-fold {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
 }
-.corner-tr {
-  top: 0.375rem;
-  right: 0.375rem;
-  border-top-width: 0.125rem;
-  border-right-width: 0.125rem;
+.panelx-glass-panel-fold span {
+  width: 100%;
+  height: 2px;
+  background: var(--px-panel-fold);
 }
-.corner-bl {
-  bottom: 0.375rem;
-  left: 0.375rem;
-  border-bottom-width: 0.125rem;
-  border-left-width: 0.125rem;
-}
-.corner-br {
-  bottom: 0.375rem;
-  right: 0.375rem;
-  border-bottom-width: 0.125rem;
-  border-right-width: 0.125rem;
-}
+
+/* 内容区域 */
 .panelx-glass-panel-body {
   flex: 1;
   min-height: 0;
-  padding: 0.25rem;
+  padding: 24px 20px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-/* 让 slot 唯一子节点填满 body，避免底部空白与多余滚动条 */
-.panelx-glass-panel-body > * {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
 }
 </style>

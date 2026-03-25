@@ -72,12 +72,16 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
     defaultProps: {
       title: '图表',
       subTitle: 'CHART',
+      tabColor: 'blue',
+      showTab: true,
       seriesType: 'bar',
       options: chartDefaultOptions
     },
     propConfig: [
       { key: 'title', label: '标题', type: 'string', default: '图表' },
       { key: 'subTitle', label: '副标题', type: 'string', default: 'CHART' },
+      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'blue' },
+      { key: 'showTab', label: '显示顶部色带', type: 'boolean', default: true },
       { key: 'seriesType', label: '系列类型', type: 'string', default: 'bar' },
       { key: 'options', label: '图表配置', type: 'object', default: chartDefaultOptions }
     ]
@@ -99,34 +103,16 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
     defaultProps: {
       title: '进度',
       subTitle: 'PROGRESS',
+      tabColor: 'cyan',
+      showTab: true,
       items: [{ label: '项1', value: '100', percent: 60 }]
     },
     propConfig: [
       { key: 'title', label: '标题', type: 'string', default: '进度' },
       { key: 'subTitle', label: '副标题', type: 'string', default: 'PROGRESS' },
+      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'cyan' },
+      { key: 'showTab', label: '显示顶部色带', type: 'boolean', default: true },
       { key: 'items', label: '列表项', type: 'array', default: [] }
-    ]
-  },
-  parkScaleStats: {
-    defaultProps: {
-      title: '园区规模统计',
-      subTitle: 'STATISTICS OF PARK SCALE',
-      ringLabel: '入驻率',
-      rate: 82,
-      items: [
-        { label: '园区总面积', value: 5790, unit: '㎡', percent: 78 },
-        { label: '楼栋数量', value: 4, unit: '栋', percent: 46 },
-        { label: '办公区域', value: 264, unit: '个', percent: 62 }
-      ],
-      palette: ['#70a1ff', '#48dbfb', '#feca57']
-    },
-    propConfig: [
-      { key: 'title', label: '标题', type: 'string', default: '园区规模统计' },
-      { key: 'subTitle', label: '副标题', type: 'string', default: 'STATISTICS OF PARK SCALE' },
-      { key: 'ringLabel', label: '圆环标签', type: 'string', default: '入驻率' },
-      { key: 'rate', label: '圆环百分比(0-100)', type: 'number', default: 82 },
-      { key: 'items', label: '指标列表', type: 'array', default: [] },
-      { key: 'palette', label: '默认三色', type: 'array', default: [] }
     ]
   },
   infoBox2D: {
@@ -149,26 +135,6 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
       { key: 'note', label: '底部备注', type: 'string', default: 'Note' },
       { key: 'colorPreset', label: '配色预设', type: 'string', default: 'cyan' },
       { key: 'fx', label: '特效', type: 'string', default: 'scanlines' }
-    ]
-  },
-  leaderLines2D: {
-    defaultProps: {
-      origin: { x: 50, y: 50 },
-      angleDeg: -45,
-      length: 70,
-      color: '#6EE7B7',
-      width: 0.8,
-      glowWidth: 2.6,
-      fx: 'glow',
-    },
-    propConfig: [
-      { key: 'origin', label: '起点(0-100)', type: 'object', default: { x: 50, y: 50 } },
-      { key: 'angleDeg', label: '角度(度，0=右，90=下)', type: 'number', default: -45 },
-      { key: 'length', label: '长度(0-100)', type: 'number', default: 70 },
-      { key: 'color', label: '线条颜色', type: 'string', default: '#6EE7B7' },
-      { key: 'width', label: '线条宽度', type: 'number', default: 0.8 },
-      { key: 'glowWidth', label: '辉光宽度', type: 'number', default: 2.6 },
-      { key: 'fx', label: '特效', type: 'string', default: 'glow' }
     ]
   },
   /** 比例尺从 Dashboard provide 的 dashboardViewport 读取 scale，无可配置 props */

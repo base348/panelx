@@ -1,6 +1,7 @@
 <template>
-  <GlassPanel :title="title" :sub-title="subTitle">
-    <div class="panelx-glass-chart-body">
+  <div class="panelx-glass-chart">
+    <GlassPanel :title="title" :sub-title="subTitle" :tab-color="tabColor" :show-tab="showTab">
+      <div class="panelx-glass-chart-body">
       <Chart
         :options="chartOptions"
         :series-type="seriesType"
@@ -8,8 +9,9 @@
         height="100%"
         :theme="chartTheme"
       />
-    </div>
-  </GlassPanel>
+      </div>
+    </GlassPanel>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -28,15 +30,23 @@ const props = withDefaults(
     seriesType?: string
     options: EChartsOption
     chartHeight?: string
+    /** 顶部色带颜色（blue/cyan/yellow/green/orange/purple） */
+    tabColor?: 'blue' | 'cyan' | 'yellow' | 'green' | 'orange' | 'purple'
+    /** 是否显示顶部色带 */
+    showTab?: boolean
     /** 单独配置本 widget 主题，覆盖 dashboard 级 theme */
     theme?: 'dark' | 'light' | 'macaron'
   }>(),
   {
     chartHeight: '100%',
     seriesType: 'bar',
+    tabColor: 'blue',
+    showTab: false,
     theme: undefined
   }
 )
+const tabColor = computed(() => props.tabColor ?? 'blue')
+const showTab = computed(() => props.showTab === true)
 
 const seriesType = computed(() => props.seriesType ?? 'bar')
 
@@ -51,6 +61,12 @@ const chartTheme = computed(() => {
 </script>
 
 <style scoped>
+.panelx-glass-chart {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
 .panelx-glass-chart-body {
   display: flex;
   flex-direction: column;

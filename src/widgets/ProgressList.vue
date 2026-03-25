@@ -1,5 +1,5 @@
 <template>
-  <GlassPanel :title="title" :sub-title="subTitle">
+  <GlassPanel :title="title" :sub-title="subTitle" :tab-color="tabColor" :show-tab="showTab">
     <div class="panelx-progress-list-content">
       <div
         v-for="(item, i) in items"
@@ -26,6 +26,8 @@ import GlassPanel from './GlassPanel.vue'
 defineProps<{
   title?: string
   subTitle?: string
+  tabColor?: 'blue' | 'cyan' | 'yellow' | 'green' | 'orange' | 'purple'
+  showTab?: boolean
   items: Array<{ label: string; value: string | number; percent: number }>
 }>()
 </script>
