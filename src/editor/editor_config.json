@@ -21,7 +21,8 @@
     { "type": "progressList", "label": "进度列表", "defaultSize": { "width": 340, "height": 200 }, "sampleImage": "" },
     { "type": "bottomNav", "label": "底栏", "defaultSize": { "width": 1920, "height": 56 }, "sampleImage": "" },
     { "type": "scaleRuler", "label": "比例尺", "defaultSize": { "width": 120, "height": 48 }, "sampleImage": "" },
-    { "type": "infoBox2D", "label": "2D信息框", "defaultSize": { "width": 320, "height": 160 }, "sampleImage": "" }
+    { "type": "infoBox2D", "label": "2D信息框", "defaultSize": { "width": 320, "height": 160 }, "sampleImage": "" },
+    { "type": "marqueeText", "label": "走马灯文字", "defaultSize": { "width": 420, "height": 40 }, "sampleImage": "" }
   ],
   "_commentPropData": "widgetPropData.defaultParams: 按类型配置默认参数，拖入画布时优先使用。dashboardData: 预留，后续支持 dashboard 的 data。",
   "widgetPropData": {
@@ -120,6 +121,17 @@
         "note": "Note",
         "colorPreset": "cyan",
         "fx": "scanlines"
+      },
+      "marqueeText": {
+        "text": "生产公告：当前 2 号线维护中，预计 14:30 恢复，请注意调度安排。",
+        "highlightColor": "#ffffff",
+        "speedSec": 12,
+        "loopCount": 0,
+        "color": "#d7ecff",
+        "fontSize": "0.875rem",
+        "fontWeight": 500,
+        "gap": "3rem",
+        "background": "transparent"
       }
     }
   }

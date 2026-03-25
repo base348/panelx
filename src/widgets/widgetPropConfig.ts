@@ -257,6 +257,30 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
   scaleRuler: {
     defaultProps: {},
     propConfig: []
+  },
+  marqueeText: {
+    defaultProps: {
+      text: '生产公告：当前 2 号线维护中，预计 14:30 恢复，请注意调度安排。',
+      speedSec: 12,
+      loopCount: 0,
+      highlightColor: '#ffffff',
+      color: '#d7ecff',
+      fontSize: '0.875rem',
+      fontWeight: 500,
+      gap: '3rem',
+      background: 'transparent'
+    },
+    propConfig: [
+      { key: 'text', label: '滚动文本', type: 'string', default: '滚动文字示例' },
+      { key: 'highlightColor', label: '高亮颜色', type: 'string', default: '#ffffff' },
+      { key: 'speedSec', label: '滚动周期(秒)', type: 'number', default: 12 },
+      { key: 'loopCount', label: '滚动次数(0=无限)', type: 'number', default: 0 },
+      { key: 'color', label: '文字颜色', type: 'string', default: '#d7ecff' },
+      { key: 'fontSize', label: '字体大小', type: 'string', default: '0.875rem' },
+      { key: 'fontWeight', label: '字体粗细', type: 'string', default: '500' },
+      { key: 'gap', label: '文字间距', type: 'string', default: '3rem' },
+      { key: 'background', label: '背景', type: 'string', default: 'transparent' }
+    ]
   }
 }
 

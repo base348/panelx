@@ -26,12 +26,21 @@ function resolveEventName(route) {
   return 'message'
 }
 
+function normalizePayloadItem(item) {
+  if (!item || typeof item !== 'object') return item
+  const rec = item
+  return {
+    ...rec,
+    noWait: rec.noWait === true
+  }
+}
+
 function normalizeDataset(fileName, raw) {
   const rec = raw && typeof raw === 'object' ? raw : {}
   const header = rec.header && typeof rec.header === 'object' ? rec.header : {}
   const strategy = header.strategy && typeof header.strategy === 'object' ? header.strategy : {}
   const route = header.route && typeof header.route === 'object' ? header.route : {}
-  const payload = Array.isArray(rec.payload) ? rec.payload : []
+  const payload = Array.isArray(rec.payload) ? rec.payload.map((item) => normalizePayloadItem(item)) : []
   return {
     fileName,
     event: resolveEventName(route),
@@ -182,7 +191,24 @@ function buildClientHeader(dataset, strategy, cursor, totalLen) {
 function startDatasetStream(res, dataset) {
   const { strategy } = dataset.header
   let cursor = 0
+  let timerId = null
+  let stopped = false
+
+  const shouldSendNextImmediately = (rows) => {
+    if (strategy.emitMode !== 'rotate') return false
+    const first = Array.isArray(rows) && rows.length > 0 ? rows[0] : null
+    return Boolean(first && typeof first === 'object' && first.noWait === true)
+  }
+
+  const scheduleNext = (delayMs) => {
+    if (stopped) return
+    timerId = setTimeout(() => {
+      sendByStrategy()
+    }, Math.max(100, delayMs))
+  }
+
   const sendByStrategy = () => {
+    if (stopped || res.writableEnded) return
     const sourcePayload = dataset.payload
     const nextPayload =
       strategy.emitMode === 'all'
@@ -191,20 +217,26 @@ function startDatasetStream(res, dataset) {
           ? [sourcePayload[cursor % sourcePayload.length]]
           : []
 
-    sendSSE(res, dataset.event, {
-      header: buildClientHeader(dataset, strategy, cursor, sourcePayload.length),
-      payload: nextPayload
-    })
+    try {
+      sendSSE(res, dataset.event, {
+        header: buildClientHeader(dataset, strategy, cursor, sourcePayload.length),
+        payload: nextPayload
+      })
+    } catch (err) {
+      stopped = true
+      if (process.env.DATA_CHAIN_LOG !== '0') {
+        console.warn(`${LOG_PREFIX} SSE.send failed: ${String(err)}`)
+      }
+      return
+    }
     cursor += 1
+    scheduleNext(shouldSendNextImmediately(nextPayload) ? 0 : strategy.intervalMs)
   }
 
-  const timeoutId = setTimeout(() => {
-    sendByStrategy()
-  }, strategy.startDelayMs)
-  const intervalId = setInterval(sendByStrategy, strategy.intervalMs)
+  scheduleNext(strategy.startDelayMs)
   return () => {
-    clearTimeout(timeoutId)
-    clearInterval(intervalId)
+    stopped = true
+    if (timerId) clearTimeout(timerId)
   }
 }
 

@@ -213,6 +213,44 @@ function parseRouteToken(token: string): { domain: ControlDomain; action: Contro
   return { domain, action }
 }
 
+function toBooleanLike(v: unknown): boolean {
+  if (typeof v === 'boolean') return v
+  if (typeof v === 'number') return v !== 0
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase()
+    if (s === 'false' || s === '0' || s === 'off' || s === 'no') return false
+    if (s === 'true' || s === '1' || s === 'on' || s === 'yes') return true
+  }
+  return Boolean(v)
+}
+
+function to2DPropertyPatch(
+  widget: WidgetConfig2D,
+  data: unknown
+): { patch: Record<string, unknown>; refresh: boolean } | null {
+  const req = (data ?? {}) as { key?: unknown; id?: unknown; params?: unknown }
+  const key = String(req?.key ?? '').trim()
+  const id = String(req?.id ?? '').trim()
+  if (id && id !== widget.id) return null
+  const params = (req?.params ?? {}) as Record<string, unknown>
+
+  // 2D property handler: direct visible toggle
+  if (key === 'widget.visible' || key === '2d.visible' || key === 'model.visible') {
+    return { patch: { visible: toBooleanLike(params.visible) }, refresh: true }
+  }
+  if (key === 'widget.propUpdate' || key === '2d.propUpdate') {
+    const propKey = String(params.propKey ?? '').trim()
+    if (!propKey) return null
+    return { patch: { [propKey]: params.value }, refresh: true }
+  }
+
+  // Fallback: treat property payload params as widget patch directly.
+  if (params && typeof params === 'object') {
+    return { patch: params, refresh: true }
+  }
+  return null
+}
+
 function toPayloadByRoute(
   widget: WidgetConfig2D | null,
   route: { domain: ControlDomain; action: ControlAction },
@@ -220,6 +258,11 @@ function toPayloadByRoute(
 ): ControlPayload | null {
   if (route.domain === '2d') {
     if (!widget) return null
+    if (route.action === 'property') {
+      const propertyUpdate = to2DPropertyPatch(widget, data)
+      if (!propertyUpdate) return null
+      return { kind: 'widget', widgetId: widget.id, patch: propertyUpdate.patch, refresh: propertyUpdate.refresh }
+    }
     const patch =
       route.action === 'chart' ||
       widget.type === 'chart' ||

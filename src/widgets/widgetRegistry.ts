@@ -22,6 +22,7 @@ import BottomNav from './BottomNav.vue'
 import ProgressList from './ProgressList.vue'
 import ScaleRuler from './ScaleRuler.vue'
 import InfoBox2D from './InfoBox2D.vue'
+import MarqueeText from './MarqueeText.vue'
 
 export const widgetComponentMap: Record<WidgetType2D, unknown> = {
   chart: Chart,
@@ -41,7 +42,8 @@ export const widgetComponentMap: Record<WidgetType2D, unknown> = {
   bottomNav: BottomNav,
   progressList: ProgressList,
   scaleRuler: ScaleRuler,
-  infoBox2D: InfoBox2D
+  infoBox2D: InfoBox2D,
+  marqueeText: MarqueeText
 }
 
 /** 根据类型取组件，未注册时回退为 Panel */
