@@ -171,6 +171,81 @@ setWidgetData?.('stat-1', { value: 123, label: '产量' })
 - **类型导出**（`src/types/widgets.ts`）  
   **`WidgetDataMap`**、**`SetWidgetDataFn`** 已导出，与 **`WidgetDataKey`**、**`SetWidgetDataKey`** 一起供全项目做类型约束。
 
+## MarqueeText 走马灯（维护说明）
+
+实现文件：**`src/widgets/MarqueeText.vue`**。用于 2D 单行横向跑马灯；属性注册见 **`src/widgets/widgetPropConfig.ts`**、**`src/widgets/widgetRegistry.ts`**，编辑器默认参数见 **`src/editor/editor_config.json`**（如有 `marqueeText` 配置）。
+
+### 行为概要
+
+- **`loopCount ≤ 0`**：无限循环（`animation-iteration-count: infinite`）。
+- **`loopCount > 0`**：滚动动画跑完指定次数后进入 **淡出**，再进入 **隐藏**（`opacity: 0`，`pointer-events: none`）。
+- **位移与入场**：用测量得到的 **容器宽度**（`--marquee-start`）与 **第一份文案宽度**（`--marquee-shift`，负值）驱动 `@keyframes panelx-marquee-loop`，使内容从右侧进入并无缝循环；**不要**用「百分比位移」代替测量值，否则与双份 DOM 拼接的循环语义容易不一致。
+- **高亮片段**：文案中用 `[[...]]` 包裹的片段解析为高亮（`parseTextSegments`）。
+
+### 状态机（`phase`）
+
+| 值 | 含义 |
+| --- | --- |
+| `looping` | 正常滚动 |
+| `exiting` | 有限次数已结束，容器执行淡出动画，轨道 `animation-play-state: paused` |
+| `done` | 淡出结束，加 `.is-hidden` 彻底不可见 |
+
+### 维护时必读：`scoped` 与 `AnimationEvent.animationName`
+
+`<style scoped>` 下，Vue 会为 **`@keyframes` 名称追加后缀**，浏览器里 **`AnimationEvent.animationName` 不等于源码中的字符串**（例如不会是裸的 `panelx-marquee-fade-out`）。
+
+因此组件内用 **`matchesKeyframeName(runtime, logical)`** 做匹配：去掉可能的 **`-webkit-`** 前缀后，判断 **全等** 或 **`逻辑名-` 前缀**（与编译后命名兼容）。**禁止**在业务里写死 `event.animationName === 'panelx-marquee-loop'` 这类仅适用于非 scoped 的写法。
+
+### `animationend` 冒泡
+
+子元素 **`animationend` 会冒泡到祖先**。走马灯在 **轨道**上监听循环结束，在 **外层容器**上监听淡出结束。必须用 **`event.target`** 区分：
+
+- **循环结束**：`event.target === trackRef`（轨道元素），再配合 `matchesKeyframeName(..., 'panelx-marquee-loop')`。
+- **淡出结束**：`event.target === containerRef`（容器自身），再配合 `matchesKeyframeName(..., 'panelx-marquee-fade-out')`。
+
+否则容器可能收到轨道冒泡上来的事件，误判为淡出结束，或淡出 `animationend` 因名字不匹配而永远不进入 `done`。
+
+### 淡出兜底定时器
+
+进入 `exiting` 时会启动 **`scheduleFadeDoneFallback()`**（时长与 **`FADE_OUT_MS`** 及 CSS 中 `panelx-marquee-fade-out` 的持续时间一致，当前为 **1.2s + 少量缓冲**）。若某环境下 `animationend` 未触发，超时后仍将 `phase` 置为 `done`，避免界面卡在「看似结束但仍占位」的状态。修改淡出时长时须 **同时改**：
+
+- 脚本中的 **`FADE_OUT_MS`**
+- 样式 **`.panelx-marquee.is-exiting`** 里 `animation` 的时长（例如 `1.2s`）
+
+并在 **`startFlow` / `onFadeEnd` / `onUnmounted`** 路径上保持 **`clearFadeDoneTimer`** 一致，避免重复定时器或卸载后回调。
+
+### 属性变更与内部状态（`startFlow`）
+
+以下 **props** 任一变化会触发 **`watch` → `startFlow()`**（含 `immediate: true` 首次挂载）：
+
+`text`、`speedSec`、`loopCount`、`highlightColor`、`color`、`fontSize`、`fontWeight`、`gap`、**`background`**
+
+`startFlow()` 会：**清除淡出兜底定时器**、将 **`phase` 置回 `looping`**、在 **`nextTick` 后 `measure()`** 更新 `--marquee-start` / `--marquee-shift`。因此从 **`exiting` / `done`** 回到编辑态时，会重新进入滚动（去掉 `.is-hidden` / `.is-exiting`），内部状态与「新一次播放」一致。
+
+**说明**：`segments` 仅由 `text` 推导；`text` 已在上述 `watch` 中，另有一条 **`segments` 的 `deep` watch** 仅负责 **`measure()`**（不单独重置 `phase`，避免与主 `watch` 重复打断节奏；主 `watch` 已会 `startFlow`）。
+
+**已在 `looping` 时改参**：`phase` 仍为 `looping`，但会再次 `measure()`，且 **`animationDuration` / `animationIterationCount` 等随 `trackStyle` 更新**；若仅改速度/次数而 DOM 未卸载，个别浏览器对「同一 class 上只改 animation 时长」的表现可能不同，以手测为准。
+
+### 如何测试（推荐）
+
+1. **编辑器里手测（最直观）**  
+   - 拖入 **走马灯** 组件，给一块足够宽的 2D 区域。  
+   - **有限次数结束 → 再改属性**：将 **`loopCount`** 设为 **1**，**`speedSec`** 略小（如 **6**），等跑马灯结束、文字淡出消失后，在右侧改 **`text`** 或 **`loopCount`**（如改回 **0** 或 **2**），应重新从右侧入场并继续按新规则播放。  
+   - **播放中改参**：在无限循环下改 **`speedSec` / `gap` / `text`**，应无报错，画面随新参数更新。  
+   - **仅改背景**：在 **`done`** 之后只改 **`background`**，应同样 **`startFlow`** 并重新显示（与实现中 **`background` 已纳入 `watch`** 一致）。
+
+2. **运行时 / SSE 改数据**  
+   若大屏通过 **`setWidgetData` / 配置更新** 改同一 widget 的 props，与编辑器同理，只要最终传入组件的 props 变化，就会走同一套 `watch`。
+
+3. **自动化（可选）**  
+   仓库已有 **Vitest + `@vue/test-utils` + happy-dom**。可对 `MarqueeText` 做挂载后 **`setProps` + `flushPromises`**，断言根节点 **无** `.is-hidden`（在从未进入 `done` 的场景），或断言 **`measure` 相关样式** 随 props 更新；要覆盖 **`done` → 改参 → 再播放** 需 **`animationend` 模拟或假定时器**，成本较高，一般以前两条手测为主。
+
+### 修改 checklist
+
+- 改 keyframes 逻辑名时：同步 **`matchesKeyframeName` 的第二个参数** 与 CSS 中的 **`@keyframes` 名**（保持同一「逻辑名」前缀，便于 scoped 后缀匹配）。
+- 改循环/淡出交互时：手测 **`loopCount` 为 0 与大于 0** 两种路径。
+- 若将 keyframes 挪到 **非 scoped** 的 `<style>`：仍建议保留 **`event.target` 校验**，但 `animationName` 可与逻辑名完全一致，需单独回归测试。
+
 ## 3D Model Props 规则（Editor3D）
 
 3D 场景里可拖入/可配置的模型由 `Model` 的实例承载，Editor3D 会根据模型类型暴露的 `supportedProps` 来渲染右侧「属性（Props）」面板。
