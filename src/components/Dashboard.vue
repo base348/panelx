@@ -480,9 +480,25 @@ async function setupDataSourceConnector() {
         if (!tid) return
         if (routed.route.domain === '2d') {
           const w2 = widget2DById.get(tid)
-          if (!w2) return
+          if (!w2) {
+            dataChainLog('Dashboard.connector.skip', {
+              reason: 'widget_2d_not_found',
+              datasourceKey: dsConfig.key,
+              targetId: tid,
+              knownIdsSample: [...widget2DById.keys()].slice(0, 12)
+            })
+            return
+          }
           const payload = toPayloadByRoute(w2, routed.route, routed.data)
-          if (!payload) return
+          if (!payload) {
+            dataChainLog('Dashboard.connector.skip', {
+              reason: 'payload_null',
+              datasourceKey: dsConfig.key,
+              targetId: tid,
+              action: routed.route.action
+            })
+            return
+          }
           dataChainLog('Dashboard.connector.routed', {
             datasourceKey: dsConfig.key,
             domain: routed.route.domain,
@@ -496,9 +512,24 @@ async function setupDataSourceConnector() {
           return
         }
         if (routed.route.domain === '3d') {
-          if (!widget3DById.has(tid)) return
+          if (!widget3DById.has(tid)) {
+            dataChainLog('Dashboard.connector.skip', {
+              reason: 'widget_3d_not_found',
+              datasourceKey: dsConfig.key,
+              targetId: tid
+            })
+            return
+          }
           const payload = toPayloadByRoute(null, routed.route, routed.data)
-          if (!payload) return
+          if (!payload) {
+            dataChainLog('Dashboard.connector.skip', {
+              reason: 'payload_null',
+              datasourceKey: dsConfig.key,
+              targetId: tid,
+              domain: '3d'
+            })
+            return
+          }
           dataChainLog('Dashboard.connector.routed', {
             datasourceKey: dsConfig.key,
             domain: routed.route.domain,
