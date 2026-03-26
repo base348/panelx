@@ -2,7 +2,7 @@
  * 各 Widget 类型的统一 prop 配置（defaultProps + propConfig），供 Editor 展示与解析 config 使用
  */
 
-import type { WidgetType2D } from '../types/dashboard'
+import type { WidgetType2D, BuiltinWidgetType2D } from '../types/dashboard'
 import type { WidgetTypeRegItem } from '../types/widgets'
 
 /** Glass 系组件 tab 色带（与 GlassPanel / GlassChart 等一致） */
@@ -17,7 +17,7 @@ const chartDefaultOptions = {
   series: [{ data: [120, 200, 150], type: 'bar' as const }]
 }
 
-export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
+export const widgetTypeReg: Record<BuiltinWidgetType2D, WidgetTypeRegItem> = {
   stat: {
     defaultProps: { value: 0, label: '指标' },
     propConfig: [
@@ -301,9 +301,11 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
 }
 
 export function getWidgetDefaultProps(type: WidgetType2D): Record<string, unknown> {
-  return { ...widgetTypeReg[type].defaultProps }
+  const reg = (widgetTypeReg as Record<string, WidgetTypeRegItem | undefined>)[type]
+  return { ...(reg?.defaultProps ?? {}) }
 }
 
 export function getWidgetPropConfig(type: WidgetType2D): WidgetTypeRegItem['propConfig'] {
-  return widgetTypeReg[type].propConfig
+  const reg = (widgetTypeReg as Record<string, WidgetTypeRegItem | undefined>)[type]
+  return reg?.propConfig ?? []
 }

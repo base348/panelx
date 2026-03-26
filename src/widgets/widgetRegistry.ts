@@ -56,10 +56,26 @@ import {
   getWidgetDefaultProps,
   getWidgetPropConfig
 } from './widgetPropConfig'
+import type { WidgetPropDef } from '../types/widgets'
 
 export { widgetTypeReg, getWidgetDefaultProps, getWidgetPropConfig }
 
 /** 根据类型取完整注册信息（defaultProps + propConfig），供 Editor 展示与解析 config */
 export function getWidgetTypeReg(type: WidgetType2D): WidgetTypeRegItem {
-  return widgetTypeReg[type] ?? { defaultProps: {}, propConfig: [] }
+  return (widgetTypeReg as Record<string, WidgetTypeRegItem | undefined>)[type] ?? { defaultProps: {}, propConfig: [] }
+}
+
+/** 外部注入：注册/覆盖 2D widget 组件与其 prop 配置 */
+export function registerWidgetTypeExtension(input: {
+  type: WidgetType2D
+  component: unknown
+  defaultProps?: Record<string, unknown>
+  propConfig?: WidgetPropDef[]
+}): void {
+  if (!input?.type || !input.component) return
+  ;(widgetComponentMap as Record<string, unknown>)[input.type] = input.component
+  ;(widgetTypeReg as Record<string, WidgetTypeRegItem>)[input.type] = {
+    defaultProps: { ...(input.defaultProps ?? {}) },
+    propConfig: [...(input.propConfig ?? [])]
+  }
 }

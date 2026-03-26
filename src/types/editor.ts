@@ -7,6 +7,8 @@ export interface RegisteredWidgetDef {
   type: WidgetType2D
   /** 在编辑器侧边栏中的显示名称 */
   label: string
+  /** 可选：分组路径（如 "图表/趋势图"），用于左侧组件树展示 */
+  group?: string
   /** 拖入画布时的默认尺寸（设计稿像素） */
   defaultSize: { width: number; height: number }
   /** 可选：在编辑器组件列表中展示的示例图 URL，如 /editor-samples/stat.png */

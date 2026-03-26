@@ -3,8 +3,8 @@
 import type { DesignRect } from './size'
 import type { WorldSize } from './size'
 
-/** 组件类型标识 */
-export type WidgetType2D =
+/** 内置 2D 组件类型标识 */
+export type BuiltinWidgetType2D =
   | 'chart'
   | 'table'
   | 'decoration'
@@ -25,6 +25,8 @@ export type WidgetType2D =
   | 'infoBox2D'
   | 'marqueeText'
   ;
+/** 2D 组件类型标识：内置 + 外部扩展（字符串） */
+export type WidgetType2D = BuiltinWidgetType2D | (string & {})
 export type WidgetType3D = 'scene3d' | 'model3d'
 export type WidgetType = WidgetType2D | WidgetType3D
 

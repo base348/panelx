@@ -6,6 +6,9 @@
 
 <script setup lang="ts">
 import { Editor } from '../editor'
+import { registerExampleEditor2DWidgets } from './registerExampleEditor2DWidgets'
+
+registerExampleEditor2DWidgets()
 </script>
 
 <style scoped>

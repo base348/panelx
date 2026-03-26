@@ -18,18 +18,32 @@
         @close="showSizeDialog = false"
       />
       <h3>组件</h3>
-      <div
-        v-for="item in widgetList"
-        :key="item.type"
-        class="panelx-editor-widget-item"
-        :title="`${item.label}(${item.type})`"
-        draggable="true"
-        @dragstart="onDragStart($event, item)"
-      >
-        <div v-if="getSampleImageUrl(item.sampleImage)" class="panelx-editor-widget-preview">
-          <img :src="getSampleImageUrl(item.sampleImage)!" :alt="item.label" />
-        </div>
-        <span class="panelx-editor-widget-label">{{ item.label }}</span>
+      <div class="panelx-editor-widget-tree">
+        <template v-for="row in widgetTreeRows" :key="row.key">
+          <button
+            v-if="row.kind === 'group'"
+            type="button"
+            class="panelx-editor-widget-group-row"
+            :style="{ paddingLeft: `${0.5 + row.depth * 0.75}rem` }"
+            @click="toggleWidgetGroup(row.path)"
+          >
+            <span class="panelx-editor-widget-group-arrow">{{ row.collapsed ? '▸' : '▾' }}</span>
+            <span class="panelx-editor-widget-group-label">{{ row.label }}</span>
+          </button>
+          <div
+            v-else
+            class="panelx-editor-widget-item"
+            :style="{ marginLeft: `${row.depth * 0.75}rem` }"
+            :title="`${row.item.label}(${row.item.type})`"
+            draggable="true"
+            @dragstart="onDragStart($event, row.item)"
+          >
+            <div v-if="getSampleImageUrl(row.item.sampleImage)" class="panelx-editor-widget-preview">
+              <img :src="getSampleImageUrl(row.item.sampleImage)!" :alt="row.item.label" />
+            </div>
+            <span class="panelx-editor-widget-label">{{ row.item.label }}</span>
+          </div>
+        </template>
       </div>
       <h3 class="mt-4">操作</h3>
       <label class="panelx-editor-merge-3d">
@@ -350,6 +364,8 @@ import { loadDatasourceConfigFromStorage } from '../utils/datasourceConfigStorag
 import { resolveDatasourceUrl } from '../utils/resolveDatasourceUrl'
 import { startSseDatasourceProbe } from '../utils/sseDatasourceProbe'
 import { dataChainLog } from '../core/comm/dataChainLog'
+import { getEditor2DConfigExtension, mergeEditor2DConfig } from './editor2dConfigRegistration'
+import { editorBuiltinConfig } from './editor-config'
 
 const router = useRouter()
 
@@ -395,6 +411,82 @@ const FALLBACK_WIDGETS: RegisteredWidgetDef[] = [
 
 const editorConfig = ref<EditorConfig | null>(null)
 const widgetList = computed(() => editorConfig.value?.registeredWidgets?.length ? editorConfig.value!.registeredWidgets : FALLBACK_WIDGETS)
+const collapsedWidgetGroups = ref<Set<string>>(new Set())
+
+type WidgetTreeGroupRow = {
+  kind: 'group'
+  key: string
+  label: string
+  path: string
+  depth: number
+  collapsed: boolean
+}
+
+type WidgetTreeWidgetRow = {
+  kind: 'widget'
+  key: string
+  depth: number
+  item: RegisteredWidgetDef
+}
+
+type WidgetTreeRow = WidgetTreeGroupRow | WidgetTreeWidgetRow
+
+function getWidgetGroupPath(item: RegisteredWidgetDef): string {
+  const raw = String(item.group ?? '').trim()
+  if (!raw) return '未分组'
+  return raw
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join('/')
+}
+
+const widgetTreeRows = computed<WidgetTreeRow[]>(() => {
+  const rows: WidgetTreeRow[] = []
+  const groups = new Map<string, { label: string; depth: number }>()
+  const children = new Map<string, Set<string>>()
+
+  for (const item of widgetList.value) {
+    const path = getWidgetGroupPath(item)
+    const segs = path.split('/').filter(Boolean)
+    let parent = ''
+    for (let i = 0; i < segs.length; i++) {
+      const current = parent ? `${parent}/${segs[i]}` : segs[i]
+      if (!groups.has(current)) groups.set(current, { label: segs[i], depth: i })
+      if (!children.has(parent)) children.set(parent, new Set())
+      children.get(parent)!.add(current)
+      parent = current
+    }
+  }
+
+  const addGroupRows = (parentPath: string): void => {
+    const list = Array.from(children.get(parentPath) ?? [])
+    list.sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+    for (const path of list) {
+      const g = groups.get(path)
+      if (!g) continue
+      const collapsed = collapsedWidgetGroups.value.has(path)
+      rows.push({ kind: 'group', key: `g:${path}`, label: g.label, path, depth: g.depth, collapsed })
+      if (!collapsed) addGroupRows(path)
+      if (!collapsed) {
+        const leafItems = widgetList.value.filter((w) => getWidgetGroupPath(w) === path)
+        for (const item of leafItems) {
+          rows.push({ kind: 'widget', key: `w:${path}:${item.type}`, depth: g.depth + 1, item })
+        }
+      }
+    }
+  }
+
+  addGroupRows('')
+  return rows
+})
+
+function toggleWidgetGroup(path: string): void {
+  const next = new Set(collapsedWidgetGroups.value)
+  if (next.has(path)) next.delete(path)
+  else next.add(path)
+  collapsedWidgetGroups.value = next
+}
 /** 数据源列表，供右侧栏「绑定数据源」下拉使用 */
 const datasourceCatalog = ref<EditorConfig['datasources']>([])
 const datasourceList = computed(() => datasourceCatalog.value ?? [])
@@ -910,14 +1002,12 @@ function onResizeStart(e: MouseEvent, w: WidgetConfig2D, handle: { key: string; 
   document.addEventListener('mouseup', onUp)
 }
 
-onMounted(async () => {
-  try {
-    const mod = await import('./editor_config.json')
-    const loaded = mod.default as EditorConfig
-    if (loaded?.registeredWidgets?.length) editorConfig.value = loaded
-  } catch {
-    // 使用 FALLBACK_WIDGETS
-  }
+onMounted(() => {
+  const merged = mergeEditor2DConfig(
+    editorBuiltinConfig ?? { registeredWidgets: [...FALLBACK_WIDGETS] },
+    getEditor2DConfigExtension()
+  )
+  if (merged.registeredWidgets.length) editorConfig.value = merged
   datasourceCatalog.value = loadDatasourceConfigFromStorage()
   logEditor2DDatasourceState('mounted', datasourceCatalog.value)
   if (isDebugEnabled()) {
@@ -1329,6 +1419,38 @@ function onImportConfigChange(e: Event) {
   font-size: 0.75rem;
   color: var(--color-secondary);
   text-transform: uppercase;
+}
+.panelx-editor-widget-tree {
+  margin-bottom: 0.25rem;
+}
+.panelx-editor-widget-group-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.35rem;
+  margin: 0 0 0.2rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #475569;
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+}
+.panelx-editor-widget-group-row:hover {
+  background: rgba(148, 163, 184, 0.15);
+}
+.panelx-editor-widget-group-arrow {
+  width: 0.75rem;
+  flex-shrink: 0;
+  color: #64748b;
+}
+.panelx-editor-widget-group-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .panelx-editor-widget-item {
   padding: 0.5rem;
