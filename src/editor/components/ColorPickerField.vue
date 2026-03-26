@@ -31,24 +31,6 @@
     <div class="panelx-color-picker-meta">
       <span class="panelx-color-picker-alpha-label">{{ alphaPercent }}%</span>
     </div>
-    <input
-      type="text"
-      class="panelx-color-picker-text"
-      spellcheck="false"
-      placeholder="transparent、#rrggbb、rgba(…)"
-      :value="textValue"
-      @input="onTextInput(($event.target as HTMLInputElement).value)"
-    />
-    <div class="panelx-color-picker-actions">
-      <button
-        type="button"
-        class="panelx-color-picker-btn"
-        title="设为 transparent"
-        @click="setTransparent"
-      >
-        透明
-      </button>
-    </div>
   </div>
 </template>
 
@@ -74,21 +56,18 @@ const g = ref(0)
 const b = ref(0)
 const a = ref(1)
 
-/** 与 props 同步的展示文本（用户直接改文本时先反映在这里由 watch 解析） */
-const textValue = ref('')
-
-function applyParsed(parsed: Rgba | null): void {
-  if (!parsed) return
+function applyParsed(parsed: Rgba): void {
   r.value = parsed.r
   g.value = parsed.g
   b.value = parsed.b
   a.value = parsed.a
 }
 
+/** 无法解析时回退为黑色不透明，避免与旧值不一致 */
 function syncFromModel(v: string): void {
-  textValue.value = v
-  const parsed = parseCssColorToRgba(v)
+  const parsed = parseCssColorToRgba(String(v ?? '').trim())
   if (parsed) applyParsed(parsed)
+  else applyParsed({ r: 0, g: 0, b: 0, a: 1 })
 }
 
 watch(
@@ -115,7 +94,6 @@ function emitCurrent(): void {
     b: b.value,
     a: a.value
   })
-  textValue.value = css
   emit('update:modelValue', css)
 }
 
@@ -134,25 +112,6 @@ function onAlphaInput(): void {
   emitCurrent()
 }
 
-function onTextInput(raw: string): void {
-  textValue.value = raw
-  const parsed = parseCssColorToRgba(raw)
-  if (parsed) {
-    applyParsed(parsed)
-    emit('update:modelValue', formatRgbaToCss(parsed))
-  } else {
-    emit('update:modelValue', raw)
-  }
-}
-
-function setTransparent(): void {
-  r.value = 0
-  g.value = 0
-  b.value = 0
-  a.value = 0
-  textValue.value = 'transparent'
-  emit('update:modelValue', 'transparent')
-}
 </script>
 
 <style scoped>
@@ -220,27 +179,5 @@ function setTransparent(): void {
 .panelx-color-picker-alpha-label {
   font-size: 0.6875rem;
   color: #888;
-}
-.panelx-color-picker-text {
-  width: 100%;
-  padding: 0.375rem 0.5rem;
-  border: 0.0625rem solid #ddd;
-  border-radius: 0.25rem;
-  font-size: 0.8125rem;
-  box-sizing: border-box;
-}
-.panelx-color-picker-actions {
-  margin-top: 0.35rem;
-}
-.panelx-color-picker-btn {
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
-  border: 0.0625rem solid #ccc;
-  border-radius: 0.25rem;
-  background: #f8f8f8;
-  cursor: pointer;
-}
-.panelx-color-picker-btn:hover {
-  background: #eee;
 }
 </style>

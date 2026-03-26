@@ -20,7 +20,6 @@ export type Rgba = { r: number; g: number; b: number; a: number }
 export function parseCssColorToRgba(input: string): Rgba | null {
   const s = String(input ?? '').trim()
   if (!s) return null
-  if (s.toLowerCase() === 'transparent') return { r: 0, g: 0, b: 0, a: 0 }
 
   const hex = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(s)
   if (hex) {
@@ -77,10 +76,9 @@ export function parseCssColorToRgba(input: string): Rgba | null {
 }
 
 /**
- * 将 RGBA 格式化为简短 CSS：全透明 → transparent；不透明 → #rrggbb；否则 rgba(...)
+ * 将 RGBA 格式化为简短 CSS：不透明 → #rrggbb；其它统一输出 rgba(...)
  */
 export function formatRgbaToCss({ r, g, b, a }: Rgba): string {
-  if (a <= 0) return 'transparent'
   const rr = clampByte(r)
   const gg = clampByte(g)
   const bb = clampByte(b)
