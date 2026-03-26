@@ -2,6 +2,9 @@
  * Widget 统一 prop 配置格式，供 Editor 展示、解析 config 与后续数据更新使用
  */
 
+/** 编辑/校验用类型：`color` 在 Editor2D 中渲染为取色器 + 文本；`string`/`number` 可配合 `enum` 渲染下拉 */
+export type WidgetPropValueType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'color'
+
 /** 单个 prop 的定义（统一格式） */
 export interface WidgetPropDef {
   /** 属性键名，与 props[key] 对应 */
@@ -9,9 +12,13 @@ export interface WidgetPropDef {
   /** 在编辑器中展示的标签 */
   label: string
   /** 编辑/校验用类型 */
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array'
+  type: WidgetPropValueType
   /** 默认值 */
   default?: unknown
+  /**
+   * 存在且非空时，在 Editor2D 中渲染为下拉（适用于 `string` / `number`）
+   */
+  enum?: readonly (string | number)[]
 }
 
 /** 某类 Widget 的注册信息：默认 props + prop 配置列表 */

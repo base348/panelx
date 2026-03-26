@@ -12,11 +12,6 @@ const router = createRouter({
       component: () => import('../examples/pages/EditorPage.vue')
     },
     {
-      path: '/editor-preview',
-      name: 'editorPreview',
-      component: () => import('../examples/pages/EditorPreviewPage.vue')
-    },
-    {
       path: '/editor3d',
       name: 'editor3d',
       component: () => import('../examples/pages/Editor3DPage.vue')

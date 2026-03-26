@@ -5,6 +5,12 @@
 import type { WidgetType2D } from '../types/dashboard'
 import type { WidgetTypeRegItem } from '../types/widgets'
 
+/** Glass 系组件 tab 色带（与 GlassPanel / GlassChart 等一致） */
+const ENUM_TAB_COLOR = ['blue', 'cyan', 'yellow', 'green', 'orange', 'purple'] as const
+
+/** ECharts 常用 series.type */
+const ENUM_CHART_SERIES = ['bar', 'line', 'pie', 'scatter', 'radar', 'gauge', 'funnel', 'heatmap'] as const
+
 const chartDefaultOptions = {
   xAxis: { type: 'category' as const, data: ['A', 'B', 'C'] },
   yAxis: { type: 'value' as const },
@@ -22,7 +28,7 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
   chart: {
     defaultProps: { options: chartDefaultOptions, seriesType: 'bar', height: '100%', width: '100%' },
     propConfig: [
-      { key: 'seriesType', label: '系列类型', type: 'string', default: 'bar' },
+      { key: 'seriesType', label: '系列类型', type: 'string', default: 'bar', enum: [...ENUM_CHART_SERIES] },
       { key: 'options', label: '图表配置', type: 'object', default: chartDefaultOptions },
       { key: 'height', label: '高度', type: 'string', default: '100%' },
       { key: 'width', label: '宽度', type: 'string', default: '100%' }
@@ -65,16 +71,14 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
       { key: 'datetime', label: '日期时间', type: 'string', default: '' },
       { key: 'temperature', label: '温度', type: 'string', default: '25℃' },
       { key: 'humidity', label: '湿度', type: 'string', default: '50%rh' },
-      { key: 'background', label: '背景', type: 'string', default: 'transparent' }
+      { key: 'background', label: '背景', type: 'color', default: 'transparent' }
     ]
   },
   topBarTime: {
     defaultProps: {
       background: 'transparent'
     },
-    propConfig: [
-      { key: 'background', label: '背景', type: 'string', default: 'transparent' }
-    ]
+    propConfig: [{ key: 'background', label: '背景', type: 'color', default: 'transparent' }]
   },
   topBarClimate: {
     defaultProps: {
@@ -85,7 +89,7 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
     propConfig: [
       { key: 'temperature', label: '温度', type: 'string', default: '25℃' },
       { key: 'humidity', label: '湿度', type: 'string', default: '50%rh' },
-      { key: 'background', label: '背景', type: 'string', default: 'transparent' }
+      { key: 'background', label: '背景', type: 'color', default: 'transparent' }
     ]
   },
   glassChart: {
@@ -105,14 +109,14 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
     propConfig: [
       { key: 'title', label: '标题', type: 'string', default: '图表' },
       { key: 'subTitle', label: '副标题', type: 'string', default: 'CHART' },
-      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'blue' },
+      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'blue', enum: [...ENUM_TAB_COLOR] },
       { key: 'showTab', label: '显示顶部色带', type: 'boolean', default: true },
       { key: 'panelOpacity', label: '面板透明度(0-1)', type: 'number', default: 0.75 },
       { key: 'panelBorderVisible', label: '显示边框', type: 'boolean', default: true },
       { key: 'panelBorderOpacity', label: '边框透明度(0-1)', type: 'number', default: 0.6 },
       { key: 'panelShadowVisible', label: '显示阴影', type: 'boolean', default: true },
       { key: 'panelShadowOpacity', label: '阴影强度(0-1)', type: 'number', default: 1 },
-      { key: 'seriesType', label: '系列类型', type: 'string', default: 'bar' },
+      { key: 'seriesType', label: '系列类型', type: 'string', default: 'bar', enum: [...ENUM_CHART_SERIES] },
       { key: 'options', label: '图表配置', type: 'object', default: chartDefaultOptions }
     ]
   },
@@ -137,7 +141,7 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
     propConfig: [
       { key: 'title', label: '标题', type: 'string', default: '关于' },
       { key: 'subTitle', label: '副标题', type: 'string', default: 'INTRODUCTION' },
-      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'cyan' },
+      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'cyan', enum: [...ENUM_TAB_COLOR] },
       { key: 'showTab', label: '显示顶部色带', type: 'boolean', default: true },
       { key: 'panelOpacity', label: '面板透明度(0-1)', type: 'number', default: 0.75 },
       { key: 'panelBorderVisible', label: '显示边框', type: 'boolean', default: true },
@@ -177,7 +181,7 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
     propConfig: [
       { key: 'title', label: '标题', type: 'string', default: '近期检修记录' },
       { key: 'subTitle', label: '副标题', type: 'string', default: 'RECENT MAINTENANCE' },
-      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'cyan' },
+      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'cyan', enum: [...ENUM_TAB_COLOR] },
       { key: 'showTab', label: '显示顶部色带', type: 'boolean', default: true },
       { key: 'panelOpacity', label: '面板透明度(0-1)', type: 'number', default: 0.75 },
       { key: 'panelBorderVisible', label: '显示边框', type: 'boolean', default: true },
@@ -185,7 +189,7 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
       { key: 'panelShadowVisible', label: '显示阴影', type: 'boolean', default: true },
       { key: 'panelShadowOpacity', label: '阴影强度(0-1)', type: 'number', default: 1 },
       { key: 'maxRows', label: '最大条数', type: 'number', default: 6 },
-      { key: 'updateMode', label: '更新模式(replace/append)', type: 'string', default: 'replace' },
+      { key: 'updateMode', label: '更新模式', type: 'string', default: 'replace', enum: ['replace', 'append'] },
       { key: 'columns', label: '列配置', type: 'array', default: [] },
       { key: 'rows', label: '数据行', type: 'array', default: [] },
       { key: 'badgeKey', label: 'Badge 字段', type: 'string', default: 'levelName' },
@@ -221,7 +225,7 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
     propConfig: [
       { key: 'title', label: '标题', type: 'string', default: '进度' },
       { key: 'subTitle', label: '副标题', type: 'string', default: 'PROGRESS' },
-      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'cyan' },
+      { key: 'tabColor', label: '顶部色带颜色', type: 'string', default: 'cyan', enum: [...ENUM_TAB_COLOR] },
       { key: 'showTab', label: '显示顶部色带', type: 'boolean', default: true },
       { key: 'panelOpacity', label: '面板透明度(0-1)', type: 'number', default: 0.75 },
       { key: 'panelBorderVisible', label: '显示边框', type: 'boolean', default: true },
@@ -249,8 +253,14 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
       { key: 'metaRight', label: '右侧元信息', type: 'string', default: 'RIGHT' },
       { key: 'content', label: '内容（用 | 分行）', type: 'string', default: '内容1|内容2' },
       { key: 'note', label: '底部备注', type: 'string', default: 'Note' },
-      { key: 'colorPreset', label: '配色预设', type: 'string', default: 'cyan' },
-      { key: 'fx', label: '特效', type: 'string', default: 'scanlines' }
+      {
+        key: 'colorPreset',
+        label: '配色预设',
+        type: 'string',
+        default: 'cyan',
+        enum: ['cyan', 'green', 'yellow', 'red', 'info', 'success', 'warning', 'error']
+      },
+      { key: 'fx', label: '特效', type: 'string', default: 'scanlines', enum: ['scanlines', 'none'] }
     ]
   },
   /** 比例尺从 Dashboard provide 的 dashboardViewport 读取 scale，无可配置 props */
@@ -272,14 +282,20 @@ export const widgetTypeReg: Record<WidgetType2D, WidgetTypeRegItem> = {
     },
     propConfig: [
       { key: 'text', label: '滚动文本', type: 'string', default: '滚动文字示例' },
-      { key: 'highlightColor', label: '高亮颜色', type: 'string', default: '#ffffff' },
+      { key: 'highlightColor', label: '高亮颜色', type: 'color', default: '#ffffff' },
       { key: 'speedSec', label: '滚动周期(秒)', type: 'number', default: 12 },
       { key: 'loopCount', label: '滚动次数(0=无限)', type: 'number', default: 0 },
-      { key: 'color', label: '文字颜色', type: 'string', default: '#d7ecff' },
+      { key: 'color', label: '文字颜色', type: 'color', default: '#d7ecff' },
       { key: 'fontSize', label: '字体大小', type: 'string', default: '0.875rem' },
-      { key: 'fontWeight', label: '字体粗细', type: 'string', default: '500' },
+      {
+        key: 'fontWeight',
+        label: '字体粗细',
+        type: 'string',
+        default: '500',
+        enum: ['300', '400', '500', '600', '700', '800']
+      },
       { key: 'gap', label: '文字间距', type: 'string', default: '3rem' },
-      { key: 'background', label: '背景', type: 'string', default: 'transparent' }
+      { key: 'background', label: '背景', type: 'color', default: 'transparent' }
     ]
   }
 }

@@ -53,17 +53,8 @@
       <button type="button" class="panelx-editor-btn" @click="previewDashboard">
         预览
       </button>
-      <button type="button" class="panelx-editor-btn" @click="loadDemo">
-        加载示例
-      </button>
-      <button type="button" class="panelx-editor-btn" @click="loadDemoBlank">
-        加载示例（新标签预览）
-      </button>
       <button type="button" class="panelx-editor-btn" @click="loadWorkshopConfig">
         加载车间大屏配置
-      </button>
-      <button type="button" class="panelx-editor-btn" @click="openDatasourceConfigPage">
-        数据源配置
       </button>
       <div class="panelx-editor-merge-3d-hint">数据源探针：{{ datasourceProbeRunning ? '运行中' : '已停止' }}</div>
       <InlineNotice :text="datasourceProbeHint" :variant="datasourceProbeHintVariant" />
@@ -255,7 +246,36 @@
             class="panelx-editor-field"
           >
             <label :title="propDef.key">{{ propDef.label }}</label>
-            <template v-if="propDef.type === 'string'">
+            <template v-if="propDef.type === 'color'">
+              <ColorPickerField
+                :model-value="String(getProp(selectedConfig, propDef) ?? '')"
+                @update:model-value="setProp(selectedConfig, propDef, $event)"
+              />
+            </template>
+            <template
+              v-else-if="
+                propDef.enum &&
+                propDef.enum.length > 0 &&
+                (propDef.type === 'string' || propDef.type === 'number')
+              "
+            >
+              <select
+                class="panelx-editor-select"
+                :value="selectDisplayString(selectedConfig, propDef)"
+                @change="onPropSelectChange(selectedConfig, propDef, ($event.target as HTMLSelectElement).value)"
+              >
+                <option
+                  v-if="!enumContainsValue(propDef, getProp(selectedConfig, propDef))"
+                  :value="selectDisplayString(selectedConfig, propDef)"
+                >
+                  {{ getProp(selectedConfig, propDef) }}（当前）
+                </option>
+                <option v-for="opt in propDef.enum" :key="String(opt)" :value="String(opt)">
+                  {{ opt }}
+                </option>
+              </select>
+            </template>
+            <template v-else-if="propDef.type === 'string'">
               <input
                 type="text"
                 :value="getProp(selectedConfig, propDef)"
@@ -306,6 +326,7 @@ import { getWidgetComponent, getWidgetDefaultProps, getWidgetPropConfig } from '
 import type { WidgetPropDef } from '../types/widgets'
 import SizeSettingsDialog from './SizeSettingsDialog.vue'
 import InlineNotice from './components/InlineNotice.vue'
+import ColorPickerField from './components/ColorPickerField.vue'
 import {
   EDITOR_3D_DRAFT_KEY,
   loadEditor3DDraft,
@@ -1012,6 +1033,30 @@ function setPropFromJson(w: WidgetConfig2D, propDef: WidgetPropDef, raw: string)
   }
 }
 
+function enumContainsValue(propDef: WidgetPropDef, value: unknown): boolean {
+  const list = propDef.enum ?? []
+  if (list.length === 0) return true
+  if (propDef.type === 'number') {
+    const n = Number(value)
+    return list.some((e) => Number(e) === n)
+  }
+  return list.some((e) => String(e) === String(value ?? ''))
+}
+
+function selectDisplayString(w: WidgetConfig2D, propDef: WidgetPropDef): string {
+  const v = getProp(w, propDef)
+  return propDef.type === 'number' ? String(v ?? '') : String(v ?? '')
+}
+
+function onPropSelectChange(w: WidgetConfig2D, propDef: WidgetPropDef, raw: string) {
+  if (propDef.type === 'number') {
+    const n = Number(raw)
+    setProp(w, propDef, Number.isFinite(n) ? n : propDef.default)
+  } else {
+    setProp(w, propDef, raw)
+  }
+}
+
 const typeLabelByType = computed(() => {
   const map: Record<string, string> = {}
   for (const item of widgetList.value) map[item.type] = item.label
@@ -1126,94 +1171,6 @@ function previewDashboard() {
   }
   showMergeToastFromStats()
   const href = router.resolve({ name: 'configurable', query: { source: 'local' } }).href
-  window.open(href, '_blank', 'noopener')
-}
-
-function openDatasourceConfigPage() {
-  const href = router.resolve({ name: 'datasourceConfig' }).href
-  window.open(href, '_blank', 'noopener')
-}
-
-function loadDemo() {
-  config.backgroundLayer = undefined
-  config.widgets2D = [
-    {
-      id: 'stat1',
-      type: 'stat',
-      layout: { x: 20, y: 20, width: 300, height: 100 },
-      visible: true,
-      props: { value: 123456, label: '总销售额', prefix: '¥', trend: 'up', trendValue: '12.5%' }
-    },
-    {
-      id: 'chart1',
-      type: 'chart',
-      layout: { x: 20, y: 140, width: 600, height: 400 },
-      visible: true,
-      props: {
-        options: {
-          xAxis: { type: 'category', data: ['1月', '2月', '3月', '4月', '5月', '6月'] },
-          yAxis: { type: 'value' },
-          series: [{ data: [120, 132, 101, 134, 90, 230], type: 'line', smooth: true }]
-        },
-        height: '100%',
-        width: '100%'
-      }
-    },
-    {
-      id: 'decoration1',
-      type: 'decoration',
-      layout: { x: 640, y: 140, width: 200, height: 120 },
-      visible: true,
-      props: { variant: 'corner' }
-    }
-  ]
-}
-
-function buildDemoConfig(): DashboardConfig {
-  return {
-    design: { ...designSize.value },
-    backgroundLayer: undefined,
-    widgets2D: [
-      {
-        id: 'stat1',
-        type: 'stat',
-        layout: { x: 20, y: 20, width: 300, height: 100 },
-        visible: true,
-        props: { value: 123456, label: '总销售额', prefix: '¥', trend: 'up', trendValue: '12.5%' }
-      },
-      {
-        id: 'chart1',
-        type: 'chart',
-        layout: { x: 20, y: 140, width: 600, height: 400 },
-        visible: true,
-        props: {
-          options: {
-            xAxis: { type: 'category', data: ['1月', '2月', '3月', '4月', '5月', '6月'] },
-            yAxis: { type: 'value' },
-            series: [{ data: [120, 132, 101, 134, 90, 230], type: 'line', smooth: true }]
-          },
-          height: '100%',
-          width: '100%'
-        }
-      },
-      {
-        id: 'decoration1',
-        type: 'decoration',
-        layout: { x: 640, y: 140, width: 200, height: 120 },
-        visible: true,
-        props: { variant: 'corner' }
-      }
-    ]
-  }
-}
-
-function loadDemoBlank() {
-  try {
-    localStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(buildDemoConfig()))
-  } catch {
-    // ignore
-  }
-  const href = router.resolve({ name: 'editorPreview' }).href
   window.open(href, '_blank', 'noopener')
 }
 
