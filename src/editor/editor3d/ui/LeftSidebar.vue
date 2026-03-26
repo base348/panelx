@@ -173,7 +173,6 @@
     </button>
     <button type="button" class="panelx-editor3d-btn" @click="triggerImportConfig">导入配置</button>
     <button type="button" class="panelx-editor3d-btn" @click="createRobotDemoScene">生成 Robot 示例</button>
-    <button type="button" class="panelx-editor3d-btn" @click="openDatasourceConfigPage">数据源配置</button>
     <div class="panelx-editor3d-size-row panelx-editor3d-size-row-bg" style="margin-top: 0.5rem;">
       <span class="panelx-editor3d-size-label">流引擎</span>
       <div class="panelx-editor3d-size-inputs">
@@ -251,7 +250,6 @@ defineProps({
   saveDraftToLocalStorage: { type: Function as PropType<() => void>, required: true },
   triggerImportConfig: { type: Function as PropType<() => void>, required: true },
   createRobotDemoScene: { type: Function as PropType<() => void>, required: true },
-  openDatasourceConfigPage: { type: Function as PropType<() => void>, required: true },
   controlEngineStatus: { type: String as PropType<'idle' | 'running' | 'paused' | 'stopped'>, required: true },
   startControlEngine: { type: Function as PropType<() => void>, required: true },
   stopControlEngine: { type: Function as PropType<() => void>, required: true },

@@ -24,7 +24,6 @@
       :save-draft-to-local-storage="saveDraftToLocalStorage"
       :trigger-import-config="triggerImportConfig"
       :create-robot-demo-scene="createRobotDemoScene"
-      :open-datasource-config-page="openDatasourceConfigPage"
       :control-engine-status="controlEngineStatus"
       :start-control-engine="startControlEngine"
       :stop-control-engine="stopControlEngine"
@@ -1307,10 +1306,6 @@ function exportConfig() {
 /** 保存当前 3D 配置到 localStorage，供 Editor2D 在「合并 3D」导出时使用 */
 function saveDraftToLocalStorage() {
   saveEditor3DDraft(buildDashboardExportPayload())
-}
-
-function openDatasourceConfigPage(): void {
-  window.open('/datasources', '_blank', 'noopener')
 }
 </script>
 
