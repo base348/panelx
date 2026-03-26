@@ -70,9 +70,41 @@
         <span class="panelx-editor3d-size-label">移动速度 (单位/秒)</span>
         <div class="panelx-editor3d-size-inputs">
           <label>S <input v-model.number="moveCmd.speed" type="number" step="any" min="0" /></label>
-          <button type="button" class="panelx-editor3d-btn panelx-editor3d-btn-inline" @click="onExecuteCommand({ key: COMMAND_KEYS.moveTo, id: selectedWidgetId!, params: { x: moveCmd.x, y: moveCmd.y, z: moveCmd.z, speed: moveCmd.speed } })">
+          <button
+            type="button"
+            class="panelx-editor3d-btn panelx-editor3d-btn-inline"
+            @click="
+              onExecuteCommand({
+                key: COMMAND_KEYS.moveTo,
+                id: selectedWidgetId!,
+                params: {
+                  x: moveCmd.x,
+                  y: moveCmd.y,
+                  z: moveCmd.z,
+                  speed: moveCmd.speed,
+                  forwardEnable: moveCmd.forwardEnable,
+                  forwardX: moveCmd.forwardX,
+                  forwardY: moveCmd.forwardY,
+                  forwardZ: moveCmd.forwardZ
+                }
+              })
+            "
+          >
             执行
           </button>
+        </div>
+      </div>
+
+      <div class="panelx-editor3d-pos-row">
+        <span class="panelx-editor3d-size-label">前向设置</span>
+        <div class="panelx-editor3d-size-inputs">
+          <label class="panelx-editor3d-checkbox">
+            <input v-model="moveCmd.forwardEnable" type="checkbox" />
+            启用前向
+          </label>
+          <label>FX <input v-model.number="moveCmd.forwardX" type="number" step="any" /></label>
+          <label>FY <input v-model.number="moveCmd.forwardY" type="number" step="any" /></label>
+          <label>FZ <input v-model.number="moveCmd.forwardZ" type="number" step="any" /></label>
         </div>
       </div>
 
@@ -88,7 +120,27 @@
               </option>
             </select>
           </label>
-          <button type="button" class="panelx-editor3d-btn panelx-editor3d-btn-inline" @click="onExecuteCommand({ key: COMMAND_KEYS.moveToAnchor, id: selectedWidgetId!, params: { anchorWidgetId, x: moveCmd.x, y: moveCmd.y, z: moveCmd.z, speed: moveCmd.speed } })">
+          <button
+            type="button"
+            class="panelx-editor3d-btn panelx-editor3d-btn-inline"
+            @click="
+              onExecuteCommand({
+                key: COMMAND_KEYS.moveToAnchor,
+                id: selectedWidgetId!,
+                params: {
+                  anchorWidgetId,
+                  x: moveCmd.x,
+                  y: moveCmd.y,
+                  z: moveCmd.z,
+                  speed: moveCmd.speed,
+                  forwardEnable: moveCmd.forwardEnable,
+                  forwardX: moveCmd.forwardX,
+                  forwardY: moveCmd.forwardY,
+                  forwardZ: moveCmd.forwardZ
+                }
+              })
+            "
+          >
             移动
           </button>
         </div>
@@ -123,7 +175,7 @@ import { COMMAND_KEYS } from '../../../../utils/manager3DRegistry'
 type RightGroups = { commandsOpen: boolean }
 type CommandVec3 = { x: number; y: number; z: number }
 type RotateCmd = CommandVec3 & { speed: number }
-type MoveCmd = CommandVec3 & { speed: number }
+type MoveCmd = CommandVec3 & { speed: number; forwardEnable: boolean; forwardX: number; forwardY: number; forwardZ: number }
 type AutoRotateCmd = { enabled: boolean; axis: 'x' | 'y' | 'z'; speedDeg: number }
 type WidgetLike = { id: string; props?: Record<string, unknown> }
 

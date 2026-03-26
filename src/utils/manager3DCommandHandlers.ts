@@ -24,6 +24,23 @@ function defaultMapMoveParamsToWorld(params: Record<string, unknown>): Vector3 {
   return new Vector3(toFiniteNumber(params.x, 0), toFiniteNumber(params.y, 0), toFiniteNumber(params.z, 0))
 }
 
+function tryApplyForwardConfig(model: Model, params: Record<string, unknown>): void {
+  const enable = params.forwardEnable
+  if (typeof enable === 'boolean') model.setForwardEnabled(enable)
+  const fx = params.forwardX
+  const fy = params.forwardY
+  const fz = params.forwardZ
+  if (fx !== undefined || fy !== undefined || fz !== undefined) {
+    model.setForwardAxis(
+      new Vector3(
+        toFiniteNumber(fx, 1),
+        toFiniteNumber(fy, 0),
+        toFiniteNumber(fz, 0)
+      )
+    )
+  }
+}
+
 export function create3DCommandHandlers(options: Create3DCommandHandlersOptions): {
   rotateTo: (req: CommandRequest) => void
   moveTo: (req: CommandRequest) => void
@@ -50,8 +67,11 @@ export function create3DCommandHandlers(options: Create3DCommandHandlersOptions)
     const params = (req.params ?? {}) as Record<string, unknown>
     const model = options.getModelById(req.id)
     if (!model?.scene) return
+    tryApplyForwardConfig(model, params)
+    const target = mapMoveParamsToWorld(params)
+    model.orientToTarget(target)
     model.setMoveSpeed(toFiniteNumber(params.speed, 1))
-    model.moveTo(mapMoveParamsToWorld(params))
+    model.moveTo(target)
   }
 
   const moveToAnchor = (req: CommandRequest): void => {
@@ -61,7 +81,33 @@ export function create3DCommandHandlers(options: Create3DCommandHandlersOptions)
     const anchor = anchorId ? options.getModelById(anchorId) : null
     if (!src?.scene || !anchor?.scene) return
 
+    const srcObj = src.scene
     const target = anchor.scene.position
+    console.log('[Editor3D.moveToAnchor.before]', {
+      id: req.id,
+      anchorId,
+      current: { x: srcObj.position.x, y: srcObj.position.y, z: srcObj.position.z },
+      target: { x: target.x, y: target.y, z: target.z },
+      forwardEnable: typeof params.forwardEnable === 'boolean' ? params.forwardEnable : src.isForwardEnabled(),
+      forwardAxis:
+        params.forwardX !== undefined || params.forwardY !== undefined || params.forwardZ !== undefined
+          ? {
+              x: toFiniteNumber(params.forwardX, 1),
+              y: toFiniteNumber(params.forwardY, 0),
+              z: toFiniteNumber(params.forwardZ, 0)
+            }
+          : src.getForwardAxis(),
+      rotationRad: { x: srcObj.rotation.x, y: srcObj.rotation.y, z: srcObj.rotation.z },
+      quaternion: { x: srcObj.quaternion.x, y: srcObj.quaternion.y, z: srcObj.quaternion.z, w: srcObj.quaternion.w }
+    })
+
+    tryApplyForwardConfig(src, params)
+    src.orientToTarget(target)
+    console.log('[Editor3D.moveToAnchor.afterOrient]', {
+      id: req.id,
+      rotationRad: { x: srcObj.rotation.x, y: srcObj.rotation.y, z: srcObj.rotation.z },
+      quaternion: { x: srcObj.quaternion.x, y: srcObj.quaternion.y, z: srcObj.quaternion.z, w: srcObj.quaternion.w }
+    })
     src.setMoveSpeed(toFiniteNumber(params.speed, 1))
     src.moveTo(new Vector3(target.x, target.y, target.z))
     options.onAnchorResolved?.(new Vector3(target.x, target.y, target.z))

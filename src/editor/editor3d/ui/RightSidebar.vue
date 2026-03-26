@@ -79,7 +79,7 @@ import CommandSection from './right/CommandSection.vue'
 type Vec3 = { x: number; y: number; z: number }
 type AxisLock = { x: boolean; y: boolean; z: boolean }
 type RotateCmd = Vec3 & { speed: number }
-type MoveCmd = Vec3 & { speed: number }
+type MoveCmd = Vec3 & { speed: number; forwardEnable: boolean; forwardX: number; forwardY: number; forwardZ: number }
 type AutoRotateCmd = { enabled: boolean; axis: 'x' | 'y' | 'z'; speedDeg: number }
 type RightGroups = { transformOpen: boolean; maskOpen: boolean; propsOpen: boolean; commandsOpen: boolean }
 type WidgetLike = { id: string; props?: Record<string, unknown> }

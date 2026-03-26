@@ -1087,7 +1087,11 @@ const moveCmd = reactive({
   x: 0,
   y: 0,
   z: 0,
-  speed: 1
+  speed: 1,
+  forwardEnable: false,
+  forwardX: 1,
+  forwardY: 0,
+  forwardZ: 0
 })
 /** 通过 model id 获取 storyboard 中的实例（非 store clone）。 */
 function getEditorModelById(id: string): Model | null {

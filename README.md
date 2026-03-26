@@ -767,11 +767,13 @@ Camera 事件示例（支持 `event: "3d_camera"`）：
 | UI 操作 | key | params 示例 | 执行位置 |
 | --- | --- | --- | --- |
 | 命令面板：旋转执行 | `editor3d.rotateTo` | `{ x, y, z, speed }` | `Editor3D` / `Scene3DFramework` |
-| 命令面板：移动执行 | `editor3d.moveTo` | `{ x, y, z, speed }` | `Editor3D` / `Scene3DFramework` |
-| 命令面板：移动到锚点 | `editor3d.moveToAnchor` | `{ anchorWidgetId, x, y, z, speed }` | `Editor3D` / `Scene3DFramework` |
+| 命令面板：移动执行 | `editor3d.moveTo` | `{ x, y, z, speed, forwardEnable?, forwardX?, forwardY?, forwardZ? }` | `Editor3D` / `Scene3DFramework` |
+| 命令面板：移动到锚点 | `editor3d.moveToAnchor` | `{ anchorWidgetId, x, y, z, speed, forwardEnable?, forwardX?, forwardY?, forwardZ? }` | `Editor3D` / `Scene3DFramework` |
 | 命令面板：自旋转开关/参数 | `editor3d.applyAutoRotateToSelected` | `{ enabled, axis, speedDeg }` | `Editor3D` / `Scene3DFramework` |
 
 ### Property（`executeProperty`）
+
+说明：模型“前向”默认向量为 `(1, 0, 0)`。当 `forwardEnable=true` 时，`moveTo/moveToAnchor` 会先转向目标再移动。
 
 | UI 操作 | key | params 示例 | 执行位置 |
 | --- | --- | --- | --- |

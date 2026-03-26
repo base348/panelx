@@ -1,4 +1,4 @@
-import {AnimationAction, AnimationClip, AnimationMixer, Box3, Mesh, MeshBasicMaterial, Object3D, Scene, SphereGeometry, Vector3} from "three";
+import {AnimationAction, AnimationClip, AnimationMixer, Box3, Mesh, MeshBasicMaterial, Object3D, Quaternion, Scene, SphereGeometry, Vector3} from "three";
 import {ModelInstanceStore} from "../ModelInstanceStore.ts";
 import type { PropDefinition } from "./ModelRegistry";
 
@@ -30,6 +30,10 @@ export class Model extends Object3D{
     moving: boolean = false
     /** 移动任务目标位置 */
     private moveTarget?: Vector3
+    /** 前向功能开关：启用后，移动前先朝向目标 */
+    private forwardEnabled: boolean = false
+    /** 本地坐标系下“正前方”向量，默认 +X */
+    private forwardAxis: Vector3 = new Vector3(1, 0, 0)
     /** snap 阈值：当某轴剩余小于该值时直接修正到目标（坐标单位/弧度单位） */
     private static readonly SNAP_EPS = 0.1
 
@@ -223,6 +227,75 @@ export class Model extends Object3D{
     moveTo(target: Vector3): void {
         this.moveTarget = target.clone()
         this.moving = true
+    }
+
+    /** 设置“前向”开关 */
+    setForwardEnabled(enabled: boolean): void {
+        this.forwardEnabled = Boolean(enabled)
+    }
+
+    /** 获取“前向”开关状态 */
+    isForwardEnabled(): boolean {
+        return this.forwardEnabled
+    }
+
+    /** 设置“正前方”向量（本地坐标系） */
+    setForwardAxis(axis: Vector3): void {
+        const v = axis.clone()
+        if (v.lengthSq() <= 1e-12) return
+        v.normalize()
+        this.forwardAxis.copy(v)
+    }
+
+    /** 获取“正前方”向量（副本） */
+    getForwardAxis(): Vector3 {
+        return this.forwardAxis.clone()
+    }
+
+    /** 若启用前向，则先将模型朝向目标，再执行移动 */
+    orientToTarget(target: Vector3): void {
+        if (!this.forwardEnabled) return
+        const obj = this.scene ?? this
+        const dirWorld = target.clone().sub(obj.getWorldPosition(new Vector3()))
+        if (dirWorld.lengthSq() <= 1e-12) return
+        const f = this.forwardAxis.clone()
+        const fx = f.x
+        const fz = f.z
+        const planarForwardInvalid = Math.abs(fx) <= 1e-12 && Math.abs(fz) <= 1e-12
+        if (planarForwardInvalid) {
+            console.warn('[Model.orientToTarget] invalid planar forward axis, expected non-zero XZ projection', {
+                modelName: this.modelName,
+                forwardAxis: { x: f.x, y: f.y, z: f.z }
+            })
+        }
+        if (planarForwardInvalid) return
+
+        // 地面直线运动：只按 XZ 平面转向。用“当前朝向 -> 目标朝向”的增量角，避免初始姿态偏置导致不准。
+        const worldQ = new Quaternion()
+        obj.getWorldQuaternion(worldQ)
+        const currentForwardWorld = f.clone().normalize().applyQuaternion(worldQ)
+
+        const currentYaw = Math.atan2(currentForwardWorld.z, currentForwardWorld.x)
+        const targetYaw = Math.atan2(dirWorld.z, dirWorld.x)
+        const deltaYawRaw = targetYaw - currentYaw
+        const deltaYaw = Math.atan2(Math.sin(deltaYawRaw), Math.cos(deltaYawRaw))
+
+        console.log('[Model.orientToTarget.beforeApply]', {
+            modelName: this.modelName,
+            target: { x: target.x, y: target.y, z: target.z },
+            dirWorld: { x: dirWorld.x, y: dirWorld.y, z: dirWorld.z },
+            forwardAxis: { x: f.x, y: f.y, z: f.z },
+            targetYaw,
+            currentYaw,
+            deltaYaw,
+            rotationBefore: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
+        })
+        obj.rotateY(deltaYaw)
+        console.log('[Model.orientToTarget.afterApply]', {
+            modelName: this.modelName,
+            rotationAfter: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
+            quaternionAfter: { x: obj.quaternion.x, y: obj.quaternion.y, z: obj.quaternion.z, w: obj.quaternion.w }
+        })
     }
 
     /**
