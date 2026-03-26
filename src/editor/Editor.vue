@@ -50,6 +50,19 @@
       <button type="button" class="panelx-editor-btn" @click="exportConfig">
         导出配置
       </button>
+      <input
+        ref="importConfigInputRef"
+        type="file"
+        accept=".json,application/json"
+        class="panelx-editor-file-input"
+        @change="onImportConfigChange"
+      />
+      <button type="button" class="panelx-editor-btn" @click="triggerImportConfig">
+        导入配置
+      </button>
+      <p class="panelx-editor-merge-3d-hint">
+        导入完整大屏 JSON；仅编辑 2D，backgroundLayer / widgets3D / scene3D 等仅保存、不在此解析或渲染
+      </p>
       <button type="button" class="panelx-editor-btn" @click="previewDashboard">
         预览
       </button>
@@ -317,7 +330,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { DashboardConfig, WidgetConfig2D } from '../types/dashboard'
 import type { EditorConfig, RegisteredWidgetDef } from '../types/editor'
-import { isDebugEnabled } from '../utils/logManager'
+import { isDebugEnabled, setDebugFromConfig } from '../utils/logManager'
 import { getWidgetSampleImageUrl } from '../assets/editor-samples'
 import { getWidgetComponent, getWidgetDefaultProps, getWidgetPropConfig } from '../widgets/widgetRegistry'
 import type { WidgetPropDef } from '../types/widgets'
@@ -638,6 +651,7 @@ function onSizeConfirm(payload: { width: number; height: number }) {
   saveDesignSizeToStorage(payload.width, payload.height)
 }
 
+const importConfigInputRef = ref<HTMLInputElement | null>(null)
 const dropRef = ref<HTMLElement | null>(null)
 const selectedId = ref<string | null>(null)
 const canvasWrapRef = ref<HTMLElement | null>(null)
@@ -1171,6 +1185,122 @@ function previewDashboard() {
   window.open(href, '_blank', 'noopener')
 }
 
+function cloneDashboardDeep<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T
+}
+
+/** 运行时 layoutUnit=percent 时，将 2D layout 转回设计稿 px，供画布与拖拽使用 */
+function dashboardPercentLayoutsToDesignPx(cfg: DashboardConfig): DashboardConfig {
+  const dw = Math.max(1, Math.floor(Number(cfg.design?.width) || DESIGN.width))
+  const dh = Math.max(1, Math.floor(Number(cfg.design?.height) || DESIGN.height))
+  const widgets2D = cfg.widgets2D.map((w) => {
+    const ly = w.layout
+    if (!ly) return w
+    return {
+      ...w,
+      layout: {
+        x: (Number(ly.x) / 100) * dw,
+        y: (Number(ly.y) / 100) * dh,
+        width: (Number(ly.width) / 100) * dw,
+        height: (Number(ly.height) / 100) * dh
+      }
+    }
+  })
+  return { ...cfg, widgets2D, layoutUnit: 'px' }
+}
+
+function parseImportedDashboardJson(raw: string): DashboardConfig | null {
+  let data: unknown
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    alert('JSON 解析失败')
+    return null
+  }
+  if (!data || typeof data !== 'object') {
+    alert('配置文件格式无效')
+    return null
+  }
+  const o = data as Record<string, unknown>
+  const design = o.design
+  const widgets2D = o.widgets2D
+  if (!design || typeof design !== 'object') {
+    alert('需包含 design 对象')
+    return null
+  }
+  const d = design as Record<string, unknown>
+  if (typeof d.width !== 'number' || typeof d.height !== 'number') {
+    alert('design 需包含数字类型的 width、height')
+    return null
+  }
+  if (!Array.isArray(widgets2D)) {
+    alert('需包含 widgets2D 数组')
+    return null
+  }
+  return data as DashboardConfig
+}
+
+function applyDashboardImport(parsed: DashboardConfig): void {
+  const base = cloneDashboardDeep(parsed)
+  const normalized =
+    base.layoutUnit === 'percent' ? dashboardPercentLayoutsToDesignPx(base) : base
+
+  setDebugFromConfig(normalized.debug ?? false)
+
+  config.design = {
+    width: Math.max(1, Math.floor(Number(normalized.design.width) || DESIGN.width)),
+    height: Math.max(1, Math.floor(Number(normalized.design.height) || DESIGN.height))
+  }
+  saveDesignSizeToStorage(config.design.width, config.design.height)
+
+  config.widgets2D = normalized.widgets2D.map((w) => cloneDashboardDeep(w))
+
+  const c = config as Record<string, unknown>
+  const setOrDel = (key: keyof DashboardConfig) => {
+    const v = normalized[key]
+    if (v !== undefined) {
+      c[key as string] = cloneDashboardDeep(v)
+    } else {
+      delete c[key as string]
+    }
+  }
+
+  setOrDel('background')
+  setOrDel('backgroundLayer')
+  setOrDel('widgets3D')
+  setOrDel('scene3D')
+  setOrDel('theme')
+  setOrDel('datasources')
+  setOrDel('layoutUnit')
+  setOrDel('debug')
+
+  selectedId.value = config.widgets2D[0]?.id ?? null
+}
+
+function triggerImportConfig() {
+  importConfigInputRef.value?.click()
+}
+
+function onImportConfigChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    try {
+      const text = typeof reader.result === 'string' ? reader.result : ''
+      const parsed = parseImportedDashboardJson(text)
+      if (!parsed) return
+      applyDashboardImport(parsed)
+    } catch (err) {
+      alert('导入失败：' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+  reader.onerror = () => alert('读取文件失败')
+  reader.readAsText(file, 'utf-8')
+}
+
 </script>
 
 <style scoped>
@@ -1298,6 +1428,13 @@ function previewDashboard() {
   background: var(--color-primary);
   color: white;
   border-color: var(--color-primary);
+}
+.panelx-editor-file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .panelx-editor-main {
   min-width: 0;
