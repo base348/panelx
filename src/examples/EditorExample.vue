@@ -1,11 +1,11 @@
 <template>
   <div class="panelx-example-editor">
-    <Editor />
+    <Editor2D />
   </div>
 </template>
 
 <script setup lang="ts">
-import { Editor } from '../editor'
+import { Editor2D } from '../editor'
 import { registerExampleEditor2DWidgets } from './registerExampleEditor2DWidgets'
 
 registerExampleEditor2DWidgets()
