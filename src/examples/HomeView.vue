@@ -25,8 +25,8 @@
 const modules = [
   { path: '/editor', label: '编辑器' },
   { path: '/editor3d', label: '3D 编辑器' },
-  { path: '/datasources', label: '数据源配置' },
-  { path: '/configurable', label: '配置加载大屏' }
+  { path: '/datasources', label: '数据源管理' },
+  { path: '/configurable', label: '加载配置' }
 ]
 </script>
 

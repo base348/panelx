@@ -20,6 +20,21 @@
       :on-create-group="onCreateGroup"
       @update:open="emit('update:floatingInstanceListOpen', $event)"
     />
+    <div class="panelx-editor3d-camera-float">
+      <div class="panelx-editor3d-camera-float-title">Camera</div>
+      <div class="panelx-editor3d-camera-float-row">
+        <span class="panelx-editor3d-camera-float-label">position</span>
+        <span class="panelx-editor3d-camera-float-value">{{ cameraInfo?.positionText || '-' }}</span>
+      </div>
+      <div class="panelx-editor3d-camera-float-row">
+        <span class="panelx-editor3d-camera-float-label">lookAt</span>
+        <span class="panelx-editor3d-camera-float-value">{{ cameraInfo?.lookAtText || '-' }}</span>
+      </div>
+      <div class="panelx-editor3d-camera-float-row">
+        <span class="panelx-editor3d-camera-float-label">zoom</span>
+        <span class="panelx-editor3d-camera-float-value">{{ cameraInfo?.zoomText || '-' }}</span>
+      </div>
+    </div>
     <WorldCanvas :world-outer-style="worldOuterStyle" :widgets3D="widgets3D" />
   </main>
 </template>
@@ -44,7 +59,16 @@ defineProps({
   onSelectWidget: { type: Function as PropType<(w: WidgetConfig3D) => void>, required: true },
   cloneWidget: { type: Function as PropType<(w: WidgetConfig3D) => void>, required: true },
   deleteWidget: { type: Function as PropType<(w: WidgetConfig3D) => void>, required: true },
-  onCreateGroup: { type: Function as PropType<(name: string) => void>, required: true }
+  onCreateGroup: { type: Function as PropType<(name: string) => void>, required: true },
+  cameraInfo: {
+    type: Object as PropType<{ positionText: string; lookAtText: string; zoomText: string }>,
+    required: false,
+    default: () => ({
+      positionText: '-',
+      lookAtText: '-',
+      zoomText: '-'
+    })
+  }
 })
 
 const emit = defineEmits<{

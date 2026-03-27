@@ -52,6 +52,7 @@
       :clone-widget="cloneWidget"
       :delete-widget="deleteWidget"
       :on-create-group="createGroup"
+      :camera-info="cameraInfo"
       @dragover="isDragOver = true"
       @dragleave="isDragOver = false"
       @drop="onDrop"
@@ -1267,6 +1268,49 @@ function applyLayersToObject(obj: Object3D, values: number[]): void {
 /** 主区域是否处于拖拽悬停 */
 const isDragOver = ref(false)
 
+const cameraInfo = reactive({
+  positionText: '-',
+  lookAtText: '-',
+  zoomText: '-'
+})
+let cameraInfoRafId: number | null = null
+
+function formatVec3(x: number, y: number, z: number): string {
+  const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00')
+  return `${fmt(x)}, ${fmt(y)}, ${fmt(z)}`
+}
+
+function syncCameraInfo(): void {
+  const sb = storyboardRef.value as BaseStoryBoard | null
+  const cam = sb?.camera as
+    | {
+        position?: { x: number; y: number; z: number }
+        zoom?: number
+      }
+    | undefined
+  if (!cam?.position) return
+  cameraInfo.positionText = formatVec3(cam.position.x, cam.position.y, cam.position.z)
+  const controls = (sb as unknown as { controls?: { target?: { x: number; y: number; z: number } } })?.controls
+  const target = controls?.target
+  cameraInfo.lookAtText = target ? formatVec3(target.x, target.y, target.z) : '0.00, 0.00, 0.00'
+  cameraInfo.zoomText = Number.isFinite(cam.zoom) ? Number(cam.zoom).toFixed(3) : '1.000'
+}
+
+function startCameraInfoLoop(): void {
+  if (cameraInfoRafId != null) return
+  const tick = () => {
+    syncCameraInfo()
+    cameraInfoRafId = requestAnimationFrame(tick)
+  }
+  tick()
+}
+
+function stopCameraInfoLoop(): void {
+  if (cameraInfoRafId == null) return
+  cancelAnimationFrame(cameraInfoRafId)
+  cameraInfoRafId = null
+}
+
 
 const {
   pendingDrop,
@@ -1371,9 +1415,11 @@ onMounted(async () => {
   // 初始化 3D world：主区域容器内创建 renderer/canvas，并在资源加载完成后回调 onFrameworkLoaded
   setup3D('#panelx-editor3d-world', onFrameworkLoaded, () => [])
   ensureWidgetGroups()
+  startCameraInfoLoop()
 })
 
 onUnmounted(() => {
+  stopCameraInfoLoop()
   stopCameraMoveAnim?.()
   stopCameraMoveAnim = null
   stopDatasourceProbeManual()
@@ -1726,6 +1772,42 @@ function saveDraftToLocalStorage() {
   border-radius: 0.5rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   overflow: hidden;
+}
+.panelx-editor3d-camera-float {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 25;
+  min-width: 15rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  color: #dbeafe;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.panelx-editor3d-camera-float-title {
+  margin-bottom: 0.35rem;
+  color: #93c5fd;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.panelx-editor3d-camera-float-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.panelx-editor3d-camera-float-label {
+  flex-shrink: 0;
+  color: #93c5fd;
+  min-width: 3.8rem;
+}
+.panelx-editor3d-camera-float-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  color: #e2e8f0;
 }
 .panelx-editor3d-instance-float.collapsed {
   max-height: none;
