@@ -26,8 +26,11 @@ const props = withDefaults(defineProps<Heatmap2DProps>(), {
   colorLow: '#0c4a6e',
   colorHigh: '#f97316',
   showGrid: true,
+  gridColor: '#e2e8f0',
+  gridOpacity: 0.35,
   cellGap: 1,
   smoothIntensity: 2,
+  colorSteps: 0,
   borderRadius: 2,
   showValues: false,
   valueFontSize: 10,
@@ -126,7 +129,10 @@ function draw(): void {
   const cols = Math.max(...mat.map((r) => r.length), 1)
   const gridVisible = props.showGrid !== false
   const gap = gridVisible ? Math.max(0, props.cellGap) : 0
+  const gridOpacity = Math.max(0, Math.min(1, Number(props.gridOpacity) || 0))
   const smoothIntensity = Math.max(1, Math.min(4, Math.round(Number(props.smoothIntensity) || 2)))
+  const colorSteps = Math.max(0, Math.floor(Number(props.colorSteps) || 0))
+  const steppedMode = colorSteps >= 2
   const vals = allValues(mat)
   const auto = finiteRange(vals)
   const vmin = props.min != null && Number.isFinite(props.min) ? props.min : auto?.min ?? 0
@@ -141,9 +147,9 @@ function draw(): void {
   const high = parseCssColorToRgba(props.colorHigh) ?? { r: 249, g: 115, b: 22, a: 1 }
   const nodata = { r: 30, g: 41, b: 59, a: 0.9 }
 
-  // 先按“更低分辨率”绘制，再平滑放大；smoothIntensity 越高越平滑
-  const sampleCols = Math.max(1, Math.ceil(cols / smoothIntensity))
-  const sampleRows = Math.max(1, Math.ceil(rows / smoothIntensity))
+  // 连续模式：降采样 + 平滑放大；阶梯模式：按原网格绘制，避免被插值抹平
+  const sampleCols = steppedMode ? cols : Math.max(1, Math.ceil(cols / smoothIntensity))
+  const sampleRows = steppedMode ? rows : Math.max(1, Math.ceil(rows / smoothIntensity))
   const heatCanvas = document.createElement('canvas')
   heatCanvas.width = sampleCols
   heatCanvas.height = sampleRows
@@ -159,7 +165,11 @@ function draw(): void {
       const v = centerCi < row.length ? row[centerCi] : NaN
       let color = nodata
       if (Number.isFinite(v)) {
-        const t = Math.max(0, Math.min(1, (v - vmin) / span))
+        let t = Math.max(0, Math.min(1, (v - vmin) / span))
+        if (steppedMode) {
+          const lv = colorSteps - 1
+          t = Math.round(t * lv) / lv
+        }
         color = lerpRgba(low, high, t)
       }
       const idx = (sri * sampleCols + sci) * 4
@@ -172,15 +182,15 @@ function draw(): void {
   heatCtx.putImageData(img, 0, 0)
 
   ctx.save()
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
+  ctx.imageSmoothingEnabled = !steppedMode
+  if (!steppedMode) ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(heatCanvas, 0, 0, w, h)
   ctx.restore()
 
-  if (gap > 0) {
-    // 用“抠除网格线”的方式保留 cellGap 外观
+  if (gridVisible && gap > 0 && gridOpacity > 0) {
+    const g = parseCssColorToRgba(props.gridColor ?? '#e2e8f0') ?? { r: 226, g: 232, b: 240, a: 1 }
     ctx.save()
-    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = `rgba(${Math.round(g.r)}, ${Math.round(g.g)}, ${Math.round(g.b)}, ${Math.max(0, Math.min(1, g.a * gridOpacity))})`
     for (let ci = 1; ci < cols; ci++) {
       const x = Math.round((ci / cols) * w - gap / 2)
       ctx.fillRect(x, 0, gap, h)
@@ -236,8 +246,11 @@ watch(
     props.colorLow,
     props.colorHigh,
     props.showGrid,
+    props.gridColor,
+    props.gridOpacity,
     props.cellGap,
     props.smoothIntensity,
+    props.colorSteps,
     props.borderRadius,
     props.showValues,
     props.valueFontSize,

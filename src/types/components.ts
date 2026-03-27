@@ -99,10 +99,16 @@ export interface Heatmap2DProps {
   colorHigh?: string
   /** 是否显示网格线 */
   showGrid?: boolean
+  /** 网格线颜色 */
+  gridColor?: string
+  /** 网格线透明度（0~1） */
+  gridOpacity?: number
   /** 单元格间隙（像素） */
   cellGap?: number
   /** 平滑强度（1~4，越大越平滑） */
   smoothIntensity?: number
+  /** 颜色阶梯数（0/1=连续，>=2=离散分段） */
+  colorSteps?: number
   /** 容器圆角（像素） */
   borderRadius?: number
   /** 是否在格内显示数值 */

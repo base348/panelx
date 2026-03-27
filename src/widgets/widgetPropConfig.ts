@@ -309,8 +309,11 @@ export const widgetTypeReg: Record<BuiltinWidgetType2D, WidgetTypeRegItem> = {
       colorLow: '#0c4a6e',
       colorHigh: '#f97316',
       showGrid: true,
+      gridColor: '#e2e8f0',
+      gridOpacity: 0.35,
       cellGap: 1,
       smoothIntensity: 2,
+      colorSteps: 0,
       borderRadius: 6,
       showValues: false
     },
@@ -329,8 +332,11 @@ export const widgetTypeReg: Record<BuiltinWidgetType2D, WidgetTypeRegItem> = {
       { key: 'colorLow', label: '低值颜色', type: 'color', default: '#0c4a6e' },
       { key: 'colorHigh', label: '高值颜色', type: 'color', default: '#f97316' },
       { key: 'showGrid', label: '显示网格', type: 'boolean', default: true },
+      { key: 'gridColor', label: '网格颜色', type: 'color', default: '#e2e8f0' },
+      { key: 'gridOpacity', label: '网格透明度(0-1)', type: 'number', default: 0.35 },
       { key: 'cellGap', label: '格间距(px)', type: 'number', default: 1 },
       { key: 'smoothIntensity', label: '平滑强度(1-4)', type: 'number', default: 2 },
+      { key: 'colorSteps', label: '颜色阶梯(0=连续)', type: 'number', default: 0 },
       { key: 'borderRadius', label: '圆角(px)', type: 'number', default: 6 },
       { key: 'showValues', label: '显示数值', type: 'boolean', default: false },
       { key: 'valueFontSize', label: '数值字号', type: 'number', default: 10 }

@@ -104,8 +104,11 @@ export const editorBuiltinDefaultParams: NonNullable<EditorConfig['widgetPropDat
     colorLow: '#0c4a6e',
     colorHigh: '#f97316',
     showGrid: true,
+    gridColor: '#e2e8f0',
+    gridOpacity: 0.35,
     cellGap: 1,
     smoothIntensity: 2,
+    colorSteps: 0,
     borderRadius: 6,
     showValues: false
   },
